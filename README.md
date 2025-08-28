@@ -123,10 +123,10 @@ Again, the bootstrap address must be the DHT Server's address. The remotes secti
         |                   |                   |
         |  +-----------+    |                   |
         `->|  Service  |<---'                   |
-           |  (e.g.,   |                       |
-           |  HTTP)    |                       |
-           +-----------+                       |
-           |                             |
-           '-----------------------------'
+           |  (e.g.,   |                        |
+           |  HTTP)    |                        |
+           +-----------+                        |
+           |                                    |
+           '------------------------------------'
            (Encrypted Peer-to-Peer Tunnel)
 ```
