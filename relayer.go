@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"slices"
+	"sync"
+	"time"
 
 	"github.com/RogueTeam/relayer/internal/p2p/peers"
 	"github.com/RogueTeam/relayer/internal/ringqueue"
@@ -53,6 +56,7 @@ type Relayer struct {
 	remote   []Remote
 	services []Service
 
+	running         bool
 	remoteListeners map[string]manet.Listener
 }
 
@@ -71,10 +75,8 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 		}
 	}()
 
-	if len(remote.Addresses) == 0 && r.dht == nil {
-		return errors.New("can't resolve remote without a DHT")
-	}
-
+	var peersQueueMutex = new(sync.Mutex)
+	var peersQueue *ringqueue.Queue[peer.ID]
 	if len(remote.Addresses) > 0 {
 		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using remote peers", remote.Name)
 		peers := make([]peer.ID, 0, len(remote.Addresses))
@@ -99,40 +101,104 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 				return fmt.Errorf("failed to connect to remote address: %w", err)
 			}
 		}
-		q, err := ringqueue.New(peers)
+		peersQueue, err = ringqueue.New(peers)
 		if err != nil {
 			return fmt.Errorf("failed to create ring queue from remote addresses: %w", err)
 		}
+	} else if r.dht != nil {
+		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using DHT truth of source", remote.Name)
 
+		cid := peers.IdentityCidFromData(remote.Name)
+
+		// Spawn worker that retrieves providers of the requested service.
 		go func() {
-			for {
-				conn, err := l.Accept()
-				if err != nil {
-					r.logger.Printf("[REMOTE] [%s] Failed to accept connection: %v", remote.Name, err)
-					break
-				}
-				go func() {
-					defer conn.Close()
+			allowedPeers := set.New(remote.AllowedPeers...)
 
-					target := q.Next()
-					r.logger.Printf("[REMOTE] [%s] Connecting to: %v", remote.Name, target)
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			for r.running {
+				func() {
+					peersQueueMutex.Lock()
+					defer peersQueueMutex.Unlock()
 
-					pid := protocol.ID(remote.Name)
-					s, err := r.host.NewStream(context.TODO(), target, pid)
+					r.logger.Printf("[REMOTE] [%s] Pulling providers", remote.Name)
+					ctx, cancel := utils.NewContext()
+					defer cancel()
+					providers, err := r.dht.FindProviders(ctx, cid)
 					if err != nil {
-						r.logger.Printf("[REMOTE] [%s] Failed to connect to: %v: %v", remote.Name, target, err)
+						r.logger.Printf("[REMOTE] [%s] failed to find providers: %v", remote.Name, err)
 						return
 					}
-					defer s.Close()
 
-					go io.Copy(s, conn)
-					io.Copy(conn, s)
+					for _, addrInfo := range providers {
+						func() {
+							ctx, cancel := utils.NewContext()
+							defer cancel()
+							err := r.host.Connect(ctx, addrInfo)
+							if err != nil {
+								r.logger.Printf("[REMOTE] [%s] failed to connect to provider %v: %v", remote.Name, addrInfo, err)
+								return
+							}
+						}()
+					}
+					peersIds := peer.AddrInfosToIDs(providers)
+					if len(peersIds) == 0 {
+						r.logger.Printf("[REMOTE] [%s] no peers providers received", remote.Name)
+						return
+					}
+
+					if len(allowedPeers) > 0 {
+						peersIds = slices.DeleteFunc(peersIds, func(e peer.ID) bool {
+							return allowedPeers.Has(e)
+						})
+					}
+
+					peersQueue, err = ringqueue.New(peersIds)
+					if err != nil {
+						r.logger.Printf("[REMOTE] [%s] failed to prepare peers queue: %v", remote.Name, err)
+						return
+					}
 				}()
+				<-ticker.C
 			}
 		}()
 	} else {
-		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using DHT truth of source", remote.Name)
+		return errors.New("can't resolve remote without a DHT")
 	}
+
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				r.logger.Printf("[REMOTE] [%s] Failed to accept connection: %v", remote.Name, err)
+				break
+			}
+			go func() {
+				defer conn.Close()
+
+				peersQueueMutex.Lock()
+				if peersQueue == nil {
+					r.logger.Printf("[REMOTE] [%s] Failed to accept connection no peers available", remote.Name)
+					return
+				}
+				target := peersQueue.Next()
+				peersQueueMutex.Unlock()
+
+				r.logger.Printf("[REMOTE] [%s] Connecting to: %v", remote.Name, target)
+
+				pid := protocol.ID(remote.Name)
+				s, err := r.host.NewStream(context.TODO(), target, pid)
+				if err != nil {
+					r.logger.Printf("[REMOTE] [%s] Failed to connect to: %v: %v", remote.Name, target, err)
+					return
+				}
+				defer s.Close()
+
+				go io.Copy(s, conn)
+				io.Copy(conn, s)
+			}()
+		}
+	}()
 
 	return nil
 }
@@ -192,10 +258,17 @@ func (r *Relayer) registerService(svc *Service) (err error) {
 	return nil
 }
 
+func (r *Relayer) unregisterService(svc *Service) (err error) {
+	r.logger.Printf("[CONFIG] [SERVICE] [%s] Unregistering service from HOST", svc.Name)
+	r.host.RemoveStreamHandler(protocol.ID(svc.Name))
+	return nil
+}
+
 // Binds remotes and handle connection for them.
 // This function returns immediatly.
 // Make sure to call Close
 func (r *Relayer) Serve() (err error) {
+	r.running = true
 	// Bind remote services locally
 	for _, remote := range r.remote {
 		err = r.bindRemote(&remote)
@@ -217,6 +290,19 @@ func (r *Relayer) Serve() (err error) {
 // This function is responsible of unregistering services and stoping
 // remote binds. DHT and Host is maintained open
 func (r *Relayer) Close() (err error) {
+	r.running = false
+
+	for name, remote := range r.remoteListeners {
+		r.logger.Printf("[CONFIG] [REMOTE] [%s] Stopping", name)
+		remote.Close()
+	}
+
+	for _, svc := range r.services {
+		err = r.unregisterService(&svc)
+		if err != nil {
+			r.logger.Printf("[CONFIG] [SERVICE] [%s] Failed to stop: %v", svc.Name, err)
+		}
+	}
 	return nil
 }
 
