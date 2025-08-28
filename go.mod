@@ -12,6 +12,8 @@ require (
 	github.com/multiformats/go-multicodec v0.9.2
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/stretchr/testify v1.10.0
+	github.com/urfave/cli/v3 v3.4.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -116,6 +118,5 @@ require (
 	golang.org/x/tools v0.36.0 // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
 	google.golang.org/protobuf v1.36.7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )

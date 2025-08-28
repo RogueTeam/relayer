@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func NewKey() (privKey crypto.PrivKey, err error) {
@@ -39,9 +40,21 @@ func LoadIdentity(location string) (privKey crypto.PrivKey, err error) {
 			return nil, fmt.Errorf("failed to marshal key: %w", err)
 		}
 
+		log.Println("[*] Saving Key Pair")
 		err = os.WriteFile(location, contents, 0o660)
 		if err != nil {
 			return nil, fmt.Errorf("failed to save private key: %w", err)
+		}
+
+		peerId, err := peer.IDFromPrivateKey(privKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get peer id: %w", err)
+		}
+
+		log.Println("[*] Saving Peer ID")
+		err = os.WriteFile(location+".peerid", []byte(peerId.String()), 0o660)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create peer id: %w", err)
 		}
 
 		return privKey, nil

@@ -1,0 +1,12 @@
+listen:
+  - /ip4/0.0.0.0/udp/8888/quic-v1
+identity-file: servicer.id
+dht:
+  enabled: true
+  bootstrap:
+    - /ip4/127.0.0.1/udp/9999/quic-v1/p2p/12D3KooWBhshrWcjxXRULopbBvbfDFvWa7kEVsKXEpPATPDg7WbM
+services:
+  - name: HTTP
+    addrs:
+      - /ip4/127.0.0.1/tcp/8080
+    advertise: true

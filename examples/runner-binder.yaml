@@ -1,0 +1,10 @@
+listen:
+  - /ip4/0.0.0.0/udp/9898/quic-v1
+identity-file: binder.id
+dht:
+  enabled: true
+  bootstrap:
+    - /ip4/127.0.0.1/udp/9999/quic-v1/p2p/12D3KooWBhshrWcjxXRULopbBvbfDFvWa7kEVsKXEpPATPDg7WbM
+remotes:
+  - name: HTTP
+    listen: /ip4/0.0.0.0/tcp/10000
