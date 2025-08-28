@@ -102,3 +102,31 @@ remotes:
 ```
 
 Again, the bootstrap address must be the DHT Server's address. The remotes section specifies the service name to look for (HTTP) and the local address and port (10000) on which the remote service will be made available. After running this, you can access the remote HTTP service by connecting to localhost:10000.
+
+```
+                 +-------------------+
+                 |    DHT Server     |
+                 |   (Discovery)     |
+                 |  `dht.yaml`      |
+                 |      9999/udp     |
+                 +-------------------+
+                            |
+        .-------------------|-------------------.
+        |                   |                   |
+        |                   |                   |
++--------------+    +--------------+    +--------------+
+|   Servicer   |    |    Servicer  |    |     Binder   |
+| (Advertiser) |    |  (Advertiser)|    |  (Consumer)  |
+| servicer.yaml|    |servicer.yaml |    | binder.yaml  |
+|  8888/udp    |    |   XYZW/udp   |    |    9898/udp  |
++--------------+    +--------------+    +--------------+
+        |                   |                   |
+        |  +-----------+    |                   |
+        `->|  Service  |<---'                   |
+           |  (e.g.,   |                       |
+           |  HTTP)    |                       |
+           +-----------+                       |
+           |                             |
+           '-----------------------------'
+           (Encrypted Peer-to-Peer Tunnel)
+```
