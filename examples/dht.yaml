@@ -1,0 +1,3 @@
+listen:
+  - /ip4/0.0.0.0/udp/9999/quic-v1
+identity-file: dht.id
