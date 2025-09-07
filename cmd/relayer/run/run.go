@@ -51,6 +51,37 @@ type (
 	}
 )
 
+var Example = Config{
+	Listen: []multiaddr.Multiaddr{
+		multiaddr.StringCast("/ip4/0.0.0.0/udp/9999/quic-v1"),
+	},
+	AdvertiseAddresses: []multiaddr.Multiaddr{
+		multiaddr.StringCast("/ip4/10.0.0.5/udp/9999/quic-v1"),
+	},
+	IdentityFile: "identity",
+	DHT: &DHT{
+		Enabled: true,
+		Peers: []multiaddr.Multiaddr{
+			multiaddr.StringCast("/ip4/10.0.0.4/udp/9999/quic-v1"),
+		},
+	},
+	Remotes: []Remote{
+		{
+			Name:          "HTTP",
+			ListenAddress: multiaddr.StringCast("/ip4/10.0.0.4/tcp/8080"),
+		},
+	},
+	Services: []Service{
+		{
+			Name: "FTP",
+			Addresses: []multiaddr.Multiaddr{
+				multiaddr.StringCast("/ip4/10.0.0.4/tcp/21"),
+			},
+			Advertise: true,
+		},
+	},
+}
+
 var Run = &cli.Command{
 	Name:        "run",
 	Description: "Run the relayer in worker mode, allowing exposing locally accessible services or binding remote services",
@@ -66,37 +97,7 @@ var Run = &cli.Command{
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) (err error) {
 		if cmd.Bool(ExampleFlag) {
-			config := Config{
-				Listen: []multiaddr.Multiaddr{
-					multiaddr.StringCast("/ip4/0.0.0.0/udp/9999/quic-v1"),
-				},
-				AdvertiseAddresses: []multiaddr.Multiaddr{
-					multiaddr.StringCast("/ip4/10.0.0.5/udp/9999/quic-v1"),
-				},
-				IdentityFile: "identity",
-				DHT: &DHT{
-					Enabled: true,
-					Peers: []multiaddr.Multiaddr{
-						multiaddr.StringCast("/ip4/10.0.0.4/udp/9999/quic-v1"),
-					},
-				},
-				Remotes: []Remote{
-					{
-						Name:          "HTTP",
-						ListenAddress: multiaddr.StringCast("/ip4/10.0.0.4/tcp/8080"),
-					},
-				},
-				Services: []Service{
-					{
-						Name: "FTP",
-						Addresses: []multiaddr.Multiaddr{
-							multiaddr.StringCast("/ip4/10.0.0.4/tcp/21"),
-						},
-						Advertise: true,
-					},
-				},
-			}
-			asBytes, err := yaml.Marshal(config)
+			asBytes, err := yaml.Marshal(Example)
 			if err != nil {
 				return fmt.Errorf("failed to marshal: %w", err)
 			}
