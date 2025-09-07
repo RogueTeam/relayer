@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/RogueTeam/relayer/cmd/relayer/dht"
-	"github.com/RogueTeam/relayer/cmd/relayer/install"
 	"github.com/RogueTeam/relayer/cmd/relayer/run"
 	"github.com/urfave/cli/v3"
 )
@@ -18,7 +17,6 @@ var app = cli.Command{
 	Commands: []*cli.Command{
 		dht.DHT,
 		run.Run,
-		install.Install,
 	},
 }
 

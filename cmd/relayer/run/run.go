@@ -8,12 +8,17 @@ import (
 	"os"
 	"time"
 
+	_ "embed"
+
 	"github.com/RogueTeam/relayer"
+	"github.com/RogueTeam/relayer/internal/mdnsutils"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
+	"github.com/RogueTeam/relayer/internal/system"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
@@ -21,6 +26,7 @@ import (
 
 const (
 	ExampleFlag = "example"
+	InstallFlag = "install"
 	ConfigFlag  = "config"
 )
 
@@ -46,6 +52,7 @@ type (
 		AdvertiseAddresses []multiaddr.Multiaddr `yaml:"advertise-addrs"`
 		IdentityFile       string                `yaml:"identity-file"`
 		DHT                *DHT                  `yaml:"dht,omitempty"`
+		MDNS               bool                  `yaml:"mdns,omitempty"`
 		Remotes            []Remote              `yaml:"remotes,omitempty"`
 		Services           []Service             `yaml:"services,omitempty"`
 	}
@@ -65,6 +72,7 @@ var Example = Config{
 			multiaddr.StringCast("/ip4/10.0.0.4/udp/9999/quic-v1"),
 		},
 	},
+	MDNS: true,
 	Remotes: []Remote{
 		{
 			Name:          "HTTP",
@@ -82,6 +90,9 @@ var Example = Config{
 	},
 }
 
+//go:embed systemd.service
+var systemdService []byte
+
 var Run = &cli.Command{
 	Name:        "run",
 	Description: "Run the relayer in worker mode, allowing exposing locally accessible services or binding remote services",
@@ -89,6 +100,10 @@ var Run = &cli.Command{
 		&cli.BoolFlag{
 			Name:        ExampleFlag,
 			DefaultText: "Write an example configuration to stdout",
+		},
+		&cli.BoolFlag{
+			Name:        InstallFlag,
+			DefaultText: "Installs relayer as a service in the system. It also creates the necessary user",
 		},
 		&cli.StringFlag{
 			Name:        ConfigFlag,
@@ -103,6 +118,24 @@ var Run = &cli.Command{
 			}
 
 			fmt.Println(string(asBytes))
+			return nil
+		}
+		if cmd.Bool(InstallFlag) {
+			var svcHandler system.ServiceHandler
+			var serviceContents []byte
+			switch {
+			case system.HasSystemd():
+				serviceContents = systemdService
+
+				svcHandler = &system.Systemd{}
+			default:
+				return errors.New("platform not supported for service installation")
+			}
+
+			err = install(svcHandler, serviceContents)
+			if err != nil {
+				return fmt.Errorf("failed to install service: %w", err)
+			}
 			return nil
 		}
 
@@ -141,8 +174,8 @@ var Run = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create host: %w", err)
 		}
-
 		log.Println("Host prepared")
+
 		var hostDht *dht.IpfsDHT
 		if config.DHT != nil {
 			log.Println("Preparing DHT")
@@ -185,6 +218,23 @@ var Run = &cli.Command{
 					return errors.New("failed to bootstrap peers, timeout")
 				}
 			}
+		}
+
+		log.Println("Checking MDNS")
+		var notifier = mdnsutils.Notifier{
+			Host: host,
+			DHT:  hostDht,
+		}
+		if config.MDNS {
+			mdnsSvc := mdns.NewMdnsService(host, "MDNS", &notifier)
+			err = mdnsSvc.Start()
+			if err != nil {
+				return fmt.Errorf("failed to start mdns: %w", err)
+			}
+			defer mdnsSvc.Close()
+			log.Println("MDNS is disabled")
+		} else {
+			log.Println("MDNS is disabled")
 		}
 
 		var remotes []relayer.Remote
