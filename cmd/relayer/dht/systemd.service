@@ -1,0 +1,14 @@
+[Unit]
+Description=Relayer DHT Service
+After=network.target
+
+[Service]
+Type=simple
+User=relayer-dht
+WorkingDirectory=/home/relayer-dht
+ExecStart=/usr/bin/relayer dht --config /etc/relayer-dht/config.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -86,6 +86,8 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 
 		// Spawn worker that retrieves providers of the requested service.
 		go func() {
+			r.logger.Printf("[REMOTE] [%s] Pulling providers worker", remote.Name)
+			defer r.logger.Printf("[REMOTE] [%s] Stopped pulling providers worker", remote.Name)
 			allowedPeers := set.New(remote.AllowedPeers...)
 
 			ticker := time.NewTicker(time.Minute)
@@ -105,6 +107,7 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 					}
 
 					for _, addrInfo := range providers {
+						r.logger.Printf("[REMOTE] [%s] Found service provider: %v", remote.Name, addrInfo)
 						func() {
 							ctx, cancel := utils.NewContext()
 							defer cancel()
@@ -152,6 +155,7 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 
 				peersQueueMutex.Lock()
 				if peersQueue == nil {
+					peersQueueMutex.Unlock()
 					r.logger.Printf("[REMOTE] [%s] Failed to accept connection no peers available", remote.Name)
 					return
 				}

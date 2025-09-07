@@ -3,6 +3,7 @@ package relayer
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/RogueTeam/relayer/internal/p2p/peers"
 	"github.com/RogueTeam/relayer/internal/ringqueue"
@@ -24,6 +25,23 @@ type Service struct {
 	AllowedPeers []peer.ID
 	// Optional. If a DHT is available the service will be advertised within it.
 	Advertise bool
+	// Optional interval to use for advertising
+	AdvertiseInterval time.Duration
+}
+
+func (r *Relayer) advertiseAttempt(svc *Service) (err error) {
+	r.logger.Printf("[CONFIG] [SERVICE] [%s] Advertising over DHT", svc.Name)
+	key := peers.IdentityCidFromData(svc.Name)
+
+	ctx, cancel := utils.NewContext()
+	defer cancel()
+	err = r.dht.Provide(ctx, key, true)
+	if err != nil {
+		return fmt.Errorf("failed to advertise over DHT: %w", err)
+	}
+
+	r.logger.Printf("[CONFIG] [SERVICE] [%s] Service advertised", svc.Name)
+	return nil
 }
 
 func (r *Relayer) registerService(svc *Service) (err error) {
@@ -67,15 +85,21 @@ func (r *Relayer) registerService(svc *Service) (err error) {
 		if r.dht == nil {
 			r.logger.Printf("[CONFIG] [SERVICE] [%s] Skiping advertise: No DHT provided", svc.Name)
 		} else {
-			r.logger.Printf("[CONFIG] [SERVICE] [%s] Advertising over DHT", svc.Name)
-			key := peers.IdentityCidFromData(svc.Name)
-
-			ctx, cancel := utils.NewContext()
-			defer cancel()
-			err = r.dht.Provide(ctx, key, true)
-			if err != nil {
-				return fmt.Errorf("failed to advertise over DHT: %w", err)
-			}
+			go func() {
+				var interval = svc.AdvertiseInterval
+				if interval == 0 {
+					interval = time.Minute
+				}
+				ticker := time.NewTicker(interval)
+				defer ticker.Stop()
+				for {
+					err := r.advertiseAttempt(svc)
+					if err != nil {
+						r.logger.Printf("[CONFIG] [SERVICE] [%s] Failed to advertise: %v", svc.Name, err)
+					}
+					<-ticker.C
+				}
+			}()
 		}
 	}
 	return nil
