@@ -1,13 +1,40 @@
 package ringqueue
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
 type Queue[T any] struct {
+	mutex  *sync.Mutex
 	idx    int
 	values []T
 }
 
+func (q *Queue[T]) Empty() (empty bool) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	return len(q.values) == 0
+}
+
+func (q *Queue[T]) Set(vs []T) (err error) {
+	if len(vs) == 0 {
+		return errors.New("no values provided")
+	}
+
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	q.idx = 0
+	q.values = vs
+	return nil
+}
+
 func (q *Queue[T]) Next() (v T) {
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
 	if q.idx >= len(q.values) {
 		q.idx = 0
 	}
@@ -17,13 +44,9 @@ func (q *Queue[T]) Next() (v T) {
 }
 
 // If len of s is zero. it returns an error
-func New[T any](s []T) (q *Queue[T], err error) {
-	if len(s) == 0 {
-		return nil, errors.New("cannot receive empty slice")
-	}
-
+func New[T any]() (q *Queue[T]) {
 	q = &Queue[T]{
-		values: s,
+		mutex: new(sync.Mutex),
 	}
-	return q, nil
+	return q
 }

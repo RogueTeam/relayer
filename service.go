@@ -49,7 +49,8 @@ func (r *Relayer) registerService(svc *Service) (err error) {
 
 	pid := protocol.ID(svc.Name)
 
-	q, err := ringqueue.New(svc.Addresses)
+	q := ringqueue.New[multiaddr.Multiaddr]()
+	err = q.Set(svc.Addresses)
 	if err != nil {
 		return fmt.Errorf("failed to create ring queue from addresses: %w", err)
 	}

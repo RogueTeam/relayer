@@ -379,7 +379,8 @@ func Test_Relayer(t *testing.T) {
 				DHT:    servicerDht,
 				Services: []relayer.Service{
 					{
-						Name: "RAW",
+						AdvertiseInterval: time.Nanosecond,
+						Name:              "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -439,8 +440,9 @@ func Test_Relayer(t *testing.T) {
 				DHT:    disallowedDht,
 				Remote: []relayer.Remote{
 					{
-						Name:          "RAW",
-						ListenAddress: disallowedBindListener.Multiaddr(),
+						RefreshInterval: time.Nanosecond,
+						Name:            "RAW",
+						ListenAddress:   disallowedBindListener.Multiaddr(),
 					},
 				},
 			}
@@ -451,6 +453,7 @@ func Test_Relayer(t *testing.T) {
 			assertions.Nil(err, "failed to bind")
 			defer disallowedBinder.Close()
 
+			time.Sleep(time.Second)
 			// Test disallowed binder ======================
 			conn, err := manet.Dial(disallowedBindListener.Multiaddr())
 			assertions.Nil(err, "failed to dial to binded address")
@@ -504,8 +507,9 @@ func Test_Relayer(t *testing.T) {
 				DHT:    allowedDht,
 				Remote: []relayer.Remote{
 					{
-						Name:          "RAW",
-						ListenAddress: allowedBindListener.Multiaddr(),
+						RefreshInterval: time.Nanosecond,
+						Name:            "RAW",
+						ListenAddress:   allowedBindListener.Multiaddr(),
 					},
 				},
 			}
@@ -515,6 +519,8 @@ func Test_Relayer(t *testing.T) {
 			err = binder.Serve()
 			assertions.Nil(err, "failed to bind")
 			defer binder.Close()
+
+			time.Sleep(time.Second)
 
 			// Test allowed binder =========================
 			conn, err = manet.Dial(allowedBindListener.Multiaddr())
@@ -608,7 +614,8 @@ func Test_Relayer(t *testing.T) {
 				DHT:    servicerDht,
 				Services: []relayer.Service{
 					{
-						Name: "RAW",
+						AdvertiseInterval: time.Nanosecond,
+						Name:              "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -670,8 +677,9 @@ func Test_Relayer(t *testing.T) {
 				DHT:    binderDht,
 				Remote: []relayer.Remote{
 					{
-						Name:          "RAW",
-						ListenAddress: tempBindListener.Multiaddr(),
+						RefreshInterval: time.Nanosecond,
+						Name:            "RAW",
+						ListenAddress:   tempBindListener.Multiaddr(),
 					},
 				},
 			}
@@ -681,6 +689,8 @@ func Test_Relayer(t *testing.T) {
 			err = allowedBinder.Serve()
 			assertions.Nil(err, "failed to bind")
 			defer allowedBinder.Close()
+
+			time.Sleep(time.Second)
 
 			conn, err := manet.Dial(tempBindListener.Multiaddr())
 			assertions.Nil(err, "failed to dial to binded address")

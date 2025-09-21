@@ -232,7 +232,7 @@ var Run = &cli.Command{
 				return fmt.Errorf("failed to start mdns: %w", err)
 			}
 			defer mdnsSvc.Close()
-			log.Println("MDNS is disabled")
+			log.Println("MDNS is enabled")
 		} else {
 			log.Println("MDNS is disabled")
 		}
