@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/RogueTeam/relayer/internal/p2p/peers"
@@ -20,6 +19,7 @@ import (
 )
 
 type Remote struct {
+	RefreshInterval time.Duration
 	// Name of the remote service
 	// This should be the same as the one advertised by remote
 	Name string
@@ -49,7 +49,6 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 		}
 	}()
 
-	var peersQueueMutex = new(sync.Mutex)
 	var peersQueue = ringqueue.New[peer.ID]()
 
 	if len(remote.Addresses) > 0 {
@@ -92,15 +91,14 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 			defer r.logger.Printf("[REMOTE] [%s] Stopped pulling providers worker", remote.Name)
 			allowedPeers := set.New(remote.AllowedPeers...)
 
-			ticker := time.NewTicker(time.Minute)
+			var interval = remote.RefreshInterval
+			if interval == 0 {
+				interval = time.Minute
+			}
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 			for r.running {
 				func() {
-					if peersQueue.Empty() {
-						peersQueueMutex.Lock()
-						defer peersQueueMutex.Unlock()
-					}
-
 					r.logger.Printf("[REMOTE] [%s] Pulling providers", remote.Name)
 					ctx, cancel := utils.NewContext()
 					defer cancel()
@@ -159,14 +157,11 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 			go func() {
 				defer conn.Close()
 
-				peersQueueMutex.Lock()
 				if peersQueue.Empty() {
-					peersQueueMutex.Unlock()
 					r.logger.Printf("[REMOTE] [%s] Failed to accept connection no peers available", remote.Name)
 					return
 				}
 				target := peersQueue.Next()
-				peersQueueMutex.Unlock()
 
 				r.logger.Printf("[REMOTE] [%s] Connecting to: %v", remote.Name, target)
 
