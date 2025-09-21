@@ -25,7 +25,9 @@ func Test_Queue(t *testing.T) {
 			t.Run(test.Name, func(t *testing.T) {
 				assertions := assert.New(t)
 
-				q, err := ringqueue.New(test.Slice)
+				q := ringqueue.New[any]()
+
+				err := q.Set(test.Slice)
 				assertions.Nil(err, "expecting no error")
 
 				for range test.Pops - 1 {
@@ -50,9 +52,10 @@ func Test_Queue(t *testing.T) {
 			t.Run(test.Name, func(t *testing.T) {
 				assertions := assert.New(t)
 
-				q, err := ringqueue.New(test.Slice)
-				assertions.NotNil(err, "expecting error")
-				assertions.Nil(q, "expecting no queue")
+				q := ringqueue.New[any]()
+				err := q.Set(test.Slice)
+				assertions.NotNil(err, "should fail")
+				assertions.True(q.Empty(), "expecting empty queue")
 			})
 		}
 	})

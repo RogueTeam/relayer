@@ -50,7 +50,8 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 	}()
 
 	var peersQueueMutex = new(sync.Mutex)
-	var peersQueue *ringqueue.Queue[peer.ID]
+	var peersQueue = ringqueue.New[peer.ID]()
+
 	if len(remote.Addresses) > 0 {
 		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using remote peers", remote.Name)
 		peers := make([]peer.ID, 0, len(remote.Addresses))
@@ -75,9 +76,10 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 				return fmt.Errorf("failed to connect to remote address: %w", err)
 			}
 		}
-		peersQueue, err = ringqueue.New(peers)
+
+		err = peersQueue.Set(peers)
 		if err != nil {
-			return fmt.Errorf("failed to create ring queue from remote addresses: %w", err)
+			return fmt.Errorf("failed to set ring queue from remote addresses: %w", err)
 		}
 	} else if r.dht != nil {
 		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using DHT truth of source", remote.Name)
@@ -94,7 +96,7 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 			defer ticker.Stop()
 			for r.running {
 				func() {
-					if peersQueue == nil {
+					if peersQueue.Empty() {
 						peersQueueMutex.Lock()
 						defer peersQueueMutex.Unlock()
 					}
@@ -133,11 +135,8 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 						return
 					}
 
-					if peersQueue != nil {
-						peersQueueMutex.Lock()
-						defer peersQueueMutex.Unlock()
-					}
-					peersQueue, err = ringqueue.New(peersIds)
+					// At this point the peers ids list is not empty
+					err = peersQueue.Set(peersIds)
 					if err != nil {
 						r.logger.Printf("[REMOTE] [%s] failed to prepare peers queue: %v", remote.Name, err)
 						return
@@ -161,7 +160,7 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 				defer conn.Close()
 
 				peersQueueMutex.Lock()
-				if peersQueue == nil {
+				if peersQueue.Empty() {
 					peersQueueMutex.Unlock()
 					r.logger.Printf("[REMOTE] [%s] Failed to accept connection no peers available", remote.Name)
 					return
