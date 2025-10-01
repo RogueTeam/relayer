@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"slices"
 	"time"
 
@@ -111,9 +112,15 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 					for _, addrInfo := range providers {
 						r.logger.Printf("[REMOTE] [%s] Found service provider: %v", remote.Name, addrInfo)
 						go func() {
+							log.Println("[REMOTE] [%s] Closing existing connections", remote.Name)
+							err := r.host.Network().ClosePeer(addrInfo.ID)
+							if err != nil {
+								log.Println("[REMOTE] [%s] Failed to close existing connections: %v", remote.Name, err)
+							}
+
 							ctx, cancel := utils.NewContext()
 							defer cancel()
-							err := r.host.Connect(ctx, addrInfo)
+							err = r.host.Connect(ctx, addrInfo)
 							if err != nil {
 								r.logger.Printf("[REMOTE] [%s] failed to connect to provider %v: %v", remote.Name, addrInfo, err)
 								return
