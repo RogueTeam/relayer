@@ -41,15 +41,15 @@ func Test_NoDHT(t *testing.T) {
 			}()
 			// Prepare identities ==========================
 			servicerIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create binder identity") {
+			if !assertions.Nil(err, "failed to create client identity") {
 				return
 			}
-			allowedBinderIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create allowed binder identity") {
+			allowedClientIdentity, err := identity.NewKey()
+			if !assertions.Nil(err, "failed to create allowed client identity") {
 				return
 			}
-			disallowedBinderIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create allowed binder identity") {
+			disallowedClientIdentity, err := identity.NewKey()
+			if !assertions.Nil(err, "failed to create allowed client identity") {
 				return
 			}
 
@@ -73,7 +73,7 @@ func Test_NoDHT(t *testing.T) {
 							localListener.Multiaddr(),
 						},
 						AllowedPeers: []peer.ID{
-							utils.Must(peer.IDFromPrivateKey(allowedBinderIdentity)),
+							utils.Must(peer.IDFromPrivateKey(allowedClientIdentity)),
 						},
 					},
 				},
@@ -87,15 +87,15 @@ func Test_NoDHT(t *testing.T) {
 
 			addrInfo := servicerHost.Peerstore().PeerInfo(servicerHost.ID())
 			remoteAddrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
-			// Prepare not allowed binder ==================
-			disallowedBinderHost, err := libp2p.New(
+			// Prepare not allowed client ==================
+			disallowedClientHost, err := libp2p.New(
 				libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/0/quic-v1"),
-				libp2p.Identity(disallowedBinderIdentity),
+				libp2p.Identity(disallowedClientIdentity),
 			)
-			if !assertions.Nil(err, "failed to create binder") {
+			if !assertions.Nil(err, "failed to create client") {
 				return
 			}
-			defer disallowedBinderHost.Close()
+			defer disallowedClientHost.Close()
 
 			disallowedBindListener, err := manet.Listen(multiaddr.StringCast("/ip4/127.0.0.1/tcp/0"))
 			if !assertions.Nil(err, "failed to listen temp bind") {
@@ -104,9 +104,9 @@ func Test_NoDHT(t *testing.T) {
 			disallowedBindListener.Close()
 
 			assertions.Nil(err, "failed to get remote addresses")
-			disallowedBinderConfig := relayer.Config{
+			disallowedClientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
-				Host:   disallowedBinderHost,
+				Host:   disallowedClientHost,
 				Remote: []relayer.Remote{
 					{
 						Name:          "RAW",
@@ -115,14 +115,14 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			disallowedBinder, err := relayer.New(&disallowedBinderConfig)
-			assertions.Nil(err, "failed to prepare binder")
+			disallowedClient, err := relayer.New(&disallowedClientConfig)
+			assertions.Nil(err, "failed to prepare client")
 
-			err = disallowedBinder.Serve()
+			err = disallowedClient.Serve()
 			assertions.Nil(err, "failed to bind")
-			defer disallowedBinder.Close()
+			defer disallowedClient.Close()
 
-			// Test disallowed binder ======================
+			// Test disallowed client ======================
 			conn, err := manet.Dial(disallowedBindListener.Multiaddr())
 			assertions.Nil(err, "failed to dial to binded address")
 			defer conn.Close()
@@ -133,15 +133,15 @@ func Test_NoDHT(t *testing.T) {
 
 			assertions.NotEqual(payload, recv, "doesn't match")
 
-			// Prepare allowed binder ======================
-			allowedBinderHost, err := libp2p.New(
+			// Prepare allowed client ======================
+			allowedClientHost, err := libp2p.New(
 				libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/0/quic-v1"),
-				libp2p.Identity(allowedBinderIdentity),
+				libp2p.Identity(allowedClientIdentity),
 			)
-			if !assertions.Nil(err, "failed to create binder") {
+			if !assertions.Nil(err, "failed to create client") {
 				return
 			}
-			defer allowedBinderHost.Close()
+			defer allowedClientHost.Close()
 
 			allowedBindListener, err := manet.Listen(multiaddr.StringCast("/ip4/127.0.0.1/tcp/0"))
 			if !assertions.Nil(err, "failed to listen temp bind") {
@@ -150,9 +150,9 @@ func Test_NoDHT(t *testing.T) {
 			allowedBindListener.Close()
 
 			assertions.Nil(err, "failed to get remote addresses")
-			allowedBinderConfig := relayer.Config{
+			allowedClientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
-				Host:   allowedBinderHost,
+				Host:   allowedClientHost,
 				Remote: []relayer.Remote{
 					{
 						Name:          "RAW",
@@ -161,14 +161,14 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			binder, err := relayer.New(&allowedBinderConfig)
-			assertions.Nil(err, "failed to prepare binder")
+			client, err := relayer.New(&allowedClientConfig)
+			assertions.Nil(err, "failed to prepare client")
 
-			err = binder.Serve()
+			err = client.Serve()
 			assertions.Nil(err, "failed to bind")
-			defer binder.Close()
+			defer client.Close()
 
-			// Test allowed binder =========================
+			// Test allowed client =========================
 			conn, err = manet.Dial(allowedBindListener.Multiaddr())
 			assertions.Nil(err, "failed to dial to binded address")
 			defer conn.Close()
@@ -202,7 +202,7 @@ func Test_NoDHT(t *testing.T) {
 
 			// Prepare services ============================
 			servicerIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create binder identity") {
+			if !assertions.Nil(err, "failed to create client identity") {
 				return
 			}
 
@@ -234,20 +234,20 @@ func Test_NoDHT(t *testing.T) {
 			assertions.Nil(err, "failed to bind")
 			defer servicer.Close()
 
-			// Prepare binder ==============================
-			binderIdentity, err := identity.NewKey()
+			// Prepare client ==============================
+			clientIdentity, err := identity.NewKey()
 			if !assertions.Nil(err, "failed to create identity") {
 				return
 			}
 
-			binderHost, err := libp2p.New(
+			clientHost, err := libp2p.New(
 				libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/0/quic-v1"),
-				libp2p.Identity(binderIdentity),
+				libp2p.Identity(clientIdentity),
 			)
-			if !assertions.Nil(err, "failed to create binder") {
+			if !assertions.Nil(err, "failed to create client") {
 				return
 			}
-			defer binderHost.Close()
+			defer clientHost.Close()
 
 			tempBindListener, err := manet.Listen(multiaddr.StringCast("/ip4/127.0.0.1/tcp/0"))
 			if !assertions.Nil(err, "failed to listen temp bind") {
@@ -258,9 +258,9 @@ func Test_NoDHT(t *testing.T) {
 			addrInfo := servicerHost.Peerstore().PeerInfo(servicerHost.ID())
 			remoteAddrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 			assertions.Nil(err, "failed to get remote addresses")
-			binderConfig := relayer.Config{
+			clientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
-				Host:   binderHost,
+				Host:   clientHost,
 				Remote: []relayer.Remote{
 					{
 						Name:          "RAW",
@@ -269,12 +269,12 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			allowedBinder, err := relayer.New(&binderConfig)
-			assertions.Nil(err, "failed to prepare binder")
+			allowedClient, err := relayer.New(&clientConfig)
+			assertions.Nil(err, "failed to prepare client")
 
-			err = allowedBinder.Serve()
+			err = allowedClient.Serve()
 			assertions.Nil(err, "failed to bind")
-			defer allowedBinder.Close()
+			defer allowedClient.Close()
 
 			conn, err := manet.Dial(tempBindListener.Multiaddr())
 			assertions.Nil(err, "failed to dial to binded address")

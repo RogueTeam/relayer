@@ -116,12 +116,8 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 						logger := logger.With("addr-info", addrInfo.String())
 						logger.Debug("Found service provider")
 						go func() {
-							logger.Debug("Closing existing connections")
-							err := r.host.Network().ClosePeer(addrInfo.ID)
-							if err != nil {
-								logger.Error("Failed to close existing connections", "error-msg", err.Error())
-							}
 
+							logger.Debug("Reconnecting")
 							ctx, cancel := utils.NewContext()
 							defer cancel()
 							err = r.host.Connect(ctx, addrInfo)

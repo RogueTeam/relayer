@@ -41,6 +41,7 @@ func Register(svc *Service) (h *Handler, err error) {
 			"kind", "service",
 			"name", svc.Name,
 			"id", svc.Host.ID(),
+			"interval", svc.AdvertiseInterval,
 		),
 		host:              svc.Host,
 		dht:               svc.DHT,
@@ -70,17 +71,13 @@ type Handler struct {
 }
 
 func (h *Handler) advertiseAttempt() (err error) {
-	h.logger.Debug("Advertising over DHT")
 	key := peers.IdentityCidFromData(h.name)
-
 	ctx, cancel := utils.NewContext()
 	defer cancel()
 	err = h.dht.Provide(ctx, key, true)
 	if err != nil {
 		return fmt.Errorf("failed to advertise over DHT: %w", err)
 	}
-
-	h.logger.Debug("Service advertised")
 	return nil
 }
 
@@ -124,7 +121,7 @@ func (h *Handler) registerService() (err error) {
 	})
 
 	if h.advertise {
-		h.logger.Info("Advertising service")
+		h.logger.Info("Advertising enabled")
 		if h.dht == nil {
 			h.logger.Warn("Skiping advertise: No DHT provided")
 		} else {
@@ -140,6 +137,7 @@ func (h *Handler) registerService() (err error) {
 					if err != nil {
 						h.logger.Error("Failed to advertise", "error-msg", err)
 					}
+					h.logger.Debug("service advertised")
 					<-ticker.C
 				}
 			}()
