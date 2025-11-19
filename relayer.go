@@ -3,19 +3,21 @@ package relayer
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 
+	"github.com/RogueTeam/relayer/service"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 type Relayer struct {
-	logger   *log.Logger
-	host     host.Host
-	dht      *dht.IpfsDHT
-	remote   []Remote
-	services []Service
+	logger *slog.Logger
+	host   host.Host
+	dht    *dht.IpfsDHT
+	remote []Remote
+
+	services []*service.Handler
 
 	running         bool
 	remoteListeners map[string]manet.Listener
@@ -33,13 +35,7 @@ func (r *Relayer) Serve() (err error) {
 			return fmt.Errorf("failed to bind remote: %s: %w", remote.Name, err)
 		}
 	}
-	// Spawn host handlers for services
-	for _, svc := range r.services {
-		err = r.registerService(&svc)
-		if err != nil {
-			return fmt.Errorf("failed to register service: %s: %w", svc.Name, err)
-		}
-	}
+
 	return nil
 }
 
@@ -50,14 +46,18 @@ func (r *Relayer) Close() (err error) {
 	r.running = false
 
 	for name, remote := range r.remoteListeners {
-		r.logger.Printf("[CONFIG] [REMOTE] [%s] Stopping", name)
-		remote.Close()
+		r.logger.Info("Stopping remote", "name", name)
+		err = remote.Close()
+		if err != nil {
+			r.logger.Error("Failed to stop remote", "name", name, "error-msg", err.Error())
+		}
 	}
 
-	for _, svc := range r.services {
-		err = r.unregisterService(&svc)
+	for _, handler := range r.services {
+		r.logger.Info("Stopping service", "name", handler.Name())
+		err = handler.Close()
 		if err != nil {
-			r.logger.Printf("[CONFIG] [SERVICE] [%s] Failed to stop: %v", svc.Name, err)
+			r.logger.Error("Failed to stop service", "name", handler.Name(), "error-msg", err.Error())
 		}
 	}
 	return nil
@@ -65,7 +65,7 @@ func (r *Relayer) Close() (err error) {
 
 type Config struct {
 	// Logger to use
-	Logger *log.Logger
+	Logger *slog.Logger
 	// Host responsible from managing
 	Host host.Host
 	// Optional DHT for advertising services
@@ -73,7 +73,7 @@ type Config struct {
 	// Remote servers to be binded locally
 	Remote []Remote
 	// Local services to be promoted
-	Services []Service
+	Services []*service.Service
 }
 
 func (c *Config) Validate() (err error) {
@@ -117,13 +117,31 @@ func New(cfg *Config) (r *Relayer, err error) {
 		return nil, fmt.Errorf("failed to validate configuration: %w", err)
 	}
 	r = &Relayer{
-		logger:   cfg.Logger,
-		host:     cfg.Host,
-		dht:      cfg.DHT,
-		remote:   cfg.Remote,
-		services: cfg.Services,
-
+		logger:          cfg.Logger,
+		host:            cfg.Host,
+		dht:             cfg.DHT,
+		remote:          cfg.Remote,
 		remoteListeners: make(map[string]manet.Listener),
+	}
+
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		r.Close()
+	}()
+
+	// Spawn host handlers for services
+	for _, svc := range cfg.Services {
+		svc.Logger = r.logger
+		svc.Host = r.host
+		svc.DHT = r.dht
+		handler, err := service.Register(svc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register service: %s: %w", svc.Name, err)
+		}
+		r.services = append(r.services, handler)
 	}
 	return r, nil
 }

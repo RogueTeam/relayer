@@ -2,13 +2,15 @@ package relayer_test
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/RogueTeam/relayer"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/RogueTeam/relayer/service"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -19,6 +21,7 @@ import (
 )
 
 func Test_Relayer(t *testing.T) {
+	var DefaultSlogHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	t.Run("No DHT", func(t *testing.T) {
 		t.Run("With Allowed Peers", func(t *testing.T) {
 			assertions := assert.New(t)
@@ -65,9 +68,9 @@ func Test_Relayer(t *testing.T) {
 			defer servicerHost.Close()
 
 			servicerConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   servicerHost,
-				Services: []relayer.Service{
+				Services: []*service.Service{
 					{
 						Name: "RAW",
 						Addresses: []multiaddr.Multiaddr{
@@ -106,7 +109,7 @@ func Test_Relayer(t *testing.T) {
 
 			assertions.Nil(err, "failed to get remote addresses")
 			disallowedBinderConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   disallowedBinderHost,
 				Remote: []relayer.Remote{
 					{
@@ -152,7 +155,7 @@ func Test_Relayer(t *testing.T) {
 
 			assertions.Nil(err, "failed to get remote addresses")
 			allowedBinderConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   allowedBinderHost,
 				Remote: []relayer.Remote{
 					{
@@ -179,7 +182,6 @@ func Test_Relayer(t *testing.T) {
 			assertions.Nil(err, "failed to read")
 
 			assertions.Equal(payload, recv, "doesn't match")
-
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
 			assertions := assert.New(t)
@@ -218,9 +220,9 @@ func Test_Relayer(t *testing.T) {
 			defer servicerHost.Close()
 
 			servicerConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   servicerHost,
-				Services: []relayer.Service{
+				Services: []*service.Service{
 					{
 						Name: "RAW",
 						Addresses: []multiaddr.Multiaddr{
@@ -261,7 +263,7 @@ func Test_Relayer(t *testing.T) {
 			remoteAddrs, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 			assertions.Nil(err, "failed to get remote addresses")
 			binderConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   binderHost,
 				Remote: []relayer.Remote{
 					{
@@ -319,12 +321,12 @@ func Test_Relayer(t *testing.T) {
 			if !assertions.Nil(err, "failed to create servicer identity") {
 				return
 			}
-			allowedBinderIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create allowed binder identity") {
+			allowedClientIdentity, err := identity.NewKey()
+			if !assertions.Nil(err, "failed to create allowed client identity") {
 				return
 			}
-			disallowedBinderIdentity, err := identity.NewKey()
-			if !assertions.Nil(err, "failed to create disallowed binder identity") {
+			disallowedClientIdentity, err := identity.NewKey()
+			if !assertions.Nil(err, "failed to create disallowed client identity") {
 				return
 			}
 
@@ -354,7 +356,7 @@ func Test_Relayer(t *testing.T) {
 			}
 			defer servicerHost.Close()
 
-			servicerDht, err := dht.New(context.TODO(),
+			dhtClient, err := dht.New(context.TODO(),
 				servicerHost,
 				dht.BootstrapPeers(dhtHost.Peerstore().PeerInfo(dhtHost.ID())),
 				dht.Mode(dht.ModeClient),
@@ -362,9 +364,9 @@ func Test_Relayer(t *testing.T) {
 			if !assertions.Nil(err, "failed to get dht service") {
 				return
 			}
-			defer servicerDht.Close()
+			defer dhtClient.Close()
 
-			err = servicerDht.Bootstrap(context.TODO())
+			err = dhtClient.Bootstrap(context.TODO())
 			assertions.Nil(err, "failed to bootstrap")
 			for range 60 {
 				if servicerHost.Peerstore().Peers().Len() > 1 {
@@ -374,10 +376,10 @@ func Test_Relayer(t *testing.T) {
 			}
 
 			servicerConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   servicerHost,
-				DHT:    servicerDht,
-				Services: []relayer.Service{
+				DHT:    dhtClient,
+				Services: []*service.Service{
 					{
 						AdvertiseInterval: time.Nanosecond,
 						Name:              "RAW",
@@ -385,68 +387,71 @@ func Test_Relayer(t *testing.T) {
 							localListener.Multiaddr(),
 						},
 						AllowedPeers: []peer.ID{
-							utils.Must(peer.IDFromPrivateKey(allowedBinderIdentity)),
+							utils.Must(peer.IDFromPrivateKey(allowedClientIdentity)),
 						},
 						Advertise: true,
 					},
 				},
 			}
 			servicer, err := relayer.New(&servicerConfig)
-			assertions.Nil(err, "failed to prepare servicer")
+			if !assertions.Nil(err, "failed to prepare servicer") {
+				return
+			}
 
 			err = servicer.Serve()
-			assertions.Nil(err, "failed to bind")
+			if !assertions.Nil(err, "failed to bind") {
+				return
+			}
 			defer servicer.Close()
 
 			// Prepare not allowed binder ==================
-			disallowedBinderHost, err := libp2p.New(
+			disallowedClientHost, err := libp2p.New(
 				libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/0/quic-v1"),
-				libp2p.Identity(disallowedBinderIdentity),
+				libp2p.Identity(disallowedClientIdentity),
 			)
 			if !assertions.Nil(err, "failed to create binder") {
 				return
 			}
-			defer disallowedBinderHost.Close()
+			defer disallowedClientHost.Close()
 
-			disallowedDht, err := dht.New(context.TODO(),
-				disallowedBinderHost,
+			disallowedClientDht, err := dht.New(context.TODO(),
+				disallowedClientHost,
 				dht.BootstrapPeers(dhtHost.Peerstore().PeerInfo(dhtHost.ID())),
 				dht.Mode(dht.ModeClient),
 				dht.Datastore(datastore.NewMapDatastore()))
 			if !assertions.Nil(err, "failed to get dht service") {
 				return
 			}
-			defer disallowedDht.Close()
+			defer disallowedClientDht.Close()
 
-			err = disallowedDht.Bootstrap(context.TODO())
+			err = disallowedClientDht.Bootstrap(context.TODO())
 			assertions.Nil(err, "failed to bootstrap")
 			for range 60 {
-				if disallowedBinderHost.Peerstore().Peers().Len() > 1 {
+				if disallowedClientHost.Peerstore().Peers().Len() > 1 {
 					break
 				}
 				time.Sleep(time.Second)
 			}
 
-			disallowedBindListener, err := manet.Listen(multiaddr.StringCast("/ip4/127.0.0.1/tcp/0"))
+			disallowedClientListener, err := manet.Listen(multiaddr.StringCast("/ip4/127.0.0.1/tcp/0"))
 			if !assertions.Nil(err, "failed to listen temp bind") {
 				return
 			}
-			disallowedBindListener.Close()
+			disallowedClientListener.Close()
 
-			assertions.Nil(err, "failed to get remote addresses")
-			disallowedBinderConfig := relayer.Config{
-				Logger: log.Default(),
-				Host:   disallowedBinderHost,
-				DHT:    disallowedDht,
+			disallowedClientConfig := relayer.Config{
+				Logger: slog.New(DefaultSlogHandler),
+				Host:   disallowedClientHost,
+				DHT:    disallowedClientDht,
 				Remote: []relayer.Remote{
 					{
 						RefreshInterval: time.Nanosecond,
 						Name:            "RAW",
-						ListenAddress:   disallowedBindListener.Multiaddr(),
+						ListenAddress:   disallowedClientListener.Multiaddr(),
 					},
 				},
 			}
-			disallowedBinder, err := relayer.New(&disallowedBinderConfig)
+			disallowedBinder, err := relayer.New(&disallowedClientConfig)
 			assertions.Nil(err, "failed to prepare binder")
 
 			err = disallowedBinder.Serve()
@@ -455,8 +460,10 @@ func Test_Relayer(t *testing.T) {
 
 			time.Sleep(time.Second)
 			// Test disallowed binder ======================
-			conn, err := manet.Dial(disallowedBindListener.Multiaddr())
-			assertions.Nil(err, "failed to dial to binded address")
+			conn, err := manet.Dial(disallowedClientListener.Multiaddr())
+			if !assertions.Nil(err, "failed to dial to binded address") {
+				return
+			}
 			defer conn.Close()
 
 			var recv = make([]byte, len(payload))
@@ -468,7 +475,7 @@ func Test_Relayer(t *testing.T) {
 			// Prepare allowed binder ======================
 			allowedBinderHost, err := libp2p.New(
 				libp2p.ListenAddrStrings("/ip4/127.0.0.1/udp/0/quic-v1"),
-				libp2p.Identity(allowedBinderIdentity),
+				libp2p.Identity(allowedClientIdentity),
 			)
 			if !assertions.Nil(err, "failed to create binder") {
 				return
@@ -500,9 +507,11 @@ func Test_Relayer(t *testing.T) {
 			}
 			allowedBindListener.Close()
 
-			assertions.Nil(err, "failed to get remote addresses")
+			if !assertions.Nil(err, "failed to get remote addresses") {
+				return
+			}
 			allowedBinderConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   allowedBinderHost,
 				DHT:    allowedDht,
 				Remote: []relayer.Remote{
@@ -514,24 +523,34 @@ func Test_Relayer(t *testing.T) {
 				},
 			}
 			binder, err := relayer.New(&allowedBinderConfig)
-			assertions.Nil(err, "failed to prepare binder")
+			if !assertions.Nil(err, "failed to prepare binder") {
+				return
+			}
 
 			err = binder.Serve()
-			assertions.Nil(err, "failed to bind")
+			if !assertions.Nil(err, "failed to bind") {
+				return
+			}
 			defer binder.Close()
 
 			time.Sleep(time.Second)
 
 			// Test allowed binder =========================
 			conn, err = manet.Dial(allowedBindListener.Multiaddr())
-			assertions.Nil(err, "failed to dial to binded address")
+			if !assertions.Nil(err, "failed to dial to binded address") {
+				return
+			}
 			defer conn.Close()
 
 			recv = make([]byte, len(payload))
 			_, err = conn.Read(recv)
-			assertions.Nil(err, "failed to read")
+			if !assertions.Nil(err, "failed to read") {
+				return
+			}
 
-			assertions.Equal(payload, recv, "doesn't match")
+			if !assertions.Equal(payload, recv, "doesn't match") {
+				return
+			}
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
 			assertions := assert.New(t)
@@ -609,10 +628,10 @@ func Test_Relayer(t *testing.T) {
 			}
 
 			servicerConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   servicerHost,
 				DHT:    servicerDht,
-				Services: []relayer.Service{
+				Services: []*service.Service{
 					{
 						AdvertiseInterval: time.Nanosecond,
 						Name:              "RAW",
@@ -672,7 +691,7 @@ func Test_Relayer(t *testing.T) {
 
 			assertions.Nil(err, "failed to get remote addresses")
 			binderConfig := relayer.Config{
-				Logger: log.Default(),
+				Logger: slog.New(DefaultSlogHandler),
 				Host:   binderHost,
 				DHT:    binderDht,
 				Remote: []relayer.Remote{

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/mdnsutils"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/system"
+	"github.com/RogueTeam/relayer/service"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -246,9 +248,9 @@ var Run = &cli.Command{
 				AllowedPeers:  remote.AllowedPeers,
 			})
 		}
-		var svcs []relayer.Service
+		var svcs = make([]*service.Service, 0, len(config.Services))
 		for _, svc := range config.Services {
-			svcs = append(svcs, relayer.Service{
+			svcs = append(svcs, &service.Service{
 				Name:         svc.Name,
 				Addresses:    svc.Addresses,
 				AllowedPeers: svc.AllowedPeers,
@@ -256,7 +258,7 @@ var Run = &cli.Command{
 			})
 		}
 		relayerConf := relayer.Config{
-			Logger:   log.Default(),
+			Logger:   slog.Default(),
 			Host:     host,
 			DHT:      hostDht,
 			Remote:   remotes,

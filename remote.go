@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"slices"
 	"time"
 
@@ -36,8 +35,8 @@ type Remote struct {
 }
 
 func (r *Relayer) bindRemote(remote *Remote) (err error) {
-	r.logger.Printf("[CONFIG] [REMOTE] [%s] Binding remote", remote.Name)
-	r.logger.Printf("[CONFIG] [REMOTE] [%s] Listening at: %v", remote.Name, remote.ListenAddress)
+	logger := r.logger.With("kind", "remote", "name", remote.Name, "listen-addr", remote.ListenAddress)
+	logger.Info("Binding")
 	l, err := manet.Listen(remote.ListenAddress)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
@@ -53,10 +52,12 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 	var peersQueue = ringqueue.New[peer.ID]()
 
 	if len(remote.Addresses) > 0 {
-		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using remote peers", remote.Name)
+		logger := logger.With("mode", "addresses", "addresses", remote.Addresses)
+		logger.Info("using remote peers")
 		peers := make([]peer.ID, 0, len(remote.Addresses))
 		for _, addr := range remote.Addresses {
-			r.logger.Printf("[CONFIG] [REMOTE] [%s] Connecting to peer: %v", remote.Name, addr)
+			logger := logger.With("address", addr)
+			logger.Info("Connecting to peer")
 
 			id, err := peer.IDFromP2PAddr(addr)
 			if err != nil {
@@ -73,6 +74,7 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 				})
 			}()
 			if err != nil {
+				logger.Error("failed to conntect", "error-msg", err.Error())
 				return fmt.Errorf("failed to connect to remote address: %w", err)
 			}
 		}
@@ -82,14 +84,15 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 			return fmt.Errorf("failed to set ring queue from remote addresses: %w", err)
 		}
 	} else if r.dht != nil {
-		r.logger.Printf("[CONFIG] [REMOTE] [%s] Using DHT truth of source", remote.Name)
+		logger := logger.With("mode", "dht")
+		logger.Info("Using DHT truth of source")
 
 		cid := peers.IdentityCidFromData(remote.Name)
 
 		// Spawn worker that retrieves providers of the requested service.
 		go func() {
-			r.logger.Printf("[REMOTE] [%s] Pulling providers worker", remote.Name)
-			defer r.logger.Printf("[REMOTE] [%s] Stopped pulling providers worker", remote.Name)
+			logger.Info("Pulling providers worker")
+			defer logger.Info("Stopped pulling providers worker")
 			allowedPeers := set.New(remote.AllowedPeers...)
 
 			var interval = remote.RefreshInterval
@@ -100,29 +103,30 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 			defer ticker.Stop()
 			for r.running {
 				func() {
-					r.logger.Printf("[REMOTE] [%s] Pulling providers", remote.Name)
+					logger.Debug("Pulling providers")
 					ctx, cancel := utils.NewContext()
 					defer cancel()
 					providers, err := r.dht.FindProviders(ctx, cid)
 					if err != nil {
-						r.logger.Printf("[REMOTE] [%s] failed to find providers: %v", remote.Name, err)
+						logger.Error("failed to find providers", "error-msg", err.Error())
 						return
 					}
 
 					for _, addrInfo := range providers {
-						r.logger.Printf("[REMOTE] [%s] Found service provider: %v", remote.Name, addrInfo)
+						logger := logger.With("addr-info", addrInfo.String())
+						logger.Debug("Found service provider")
 						go func() {
-							log.Println("[REMOTE] [%s] Closing existing connections", remote.Name)
+							logger.Debug("Closing existing connections")
 							err := r.host.Network().ClosePeer(addrInfo.ID)
 							if err != nil {
-								log.Println("[REMOTE] [%s] Failed to close existing connections: %v", remote.Name, err)
+								logger.Error("Failed to close existing connections", "error-msg", err.Error())
 							}
 
 							ctx, cancel := utils.NewContext()
 							defer cancel()
 							err = r.host.Connect(ctx, addrInfo)
 							if err != nil {
-								r.logger.Printf("[REMOTE] [%s] failed to connect to provider %v: %v", remote.Name, addrInfo, err)
+								logger.Error("failed to connect to provider", "error-msg", err.Error())
 								return
 							}
 						}()
@@ -136,14 +140,14 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 					}
 
 					if len(peersIds) == 0 {
-						r.logger.Printf("[REMOTE] [%s] no peers providers received", remote.Name)
+						logger.Info("no peers providers received")
 						return
 					}
 
 					// At this point the peers ids list is not empty
 					err = peersQueue.Set(peersIds)
 					if err != nil {
-						r.logger.Printf("[REMOTE] [%s] failed to prepare peers queue: %v", remote.Name, err)
+						logger.Error("failed to prepare peers queue", "error-msg", err)
 						return
 					}
 				}()
@@ -158,26 +162,28 @@ func (r *Relayer) bindRemote(remote *Remote) (err error) {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				r.logger.Printf("[REMOTE] [%s] Failed to accept connection: %v", remote.Name, err)
+				logger.Error("Failed to accept connection", "error-msg", err)
 				break
 			}
 			go func() {
 				defer conn.Close()
 
 				if peersQueue.Empty() {
-					r.logger.Printf("[REMOTE] [%s] Failed to accept connection no peers available", remote.Name)
+					logger.Error("Failed to accept connection no peers available")
 					return
 				}
 				target := peersQueue.Next()
 
-				r.logger.Printf("[REMOTE] [%s] Connecting to: %v", remote.Name, target)
+				logger := logger.With("target", target)
+				logger.Info("Connecting")
 
 				pid := protocol.ID(remote.Name)
 				s, err := r.host.NewStream(context.TODO(), target, pid)
 				if err != nil {
-					r.logger.Printf("[REMOTE] [%s] Failed to connect to: %v: %v", remote.Name, target, err)
+					logger.Error("failed to connect", "error-msg", err.Error())
 					return
 				}
+				logger.Info("connected")
 				defer s.Close()
 
 				go io.Copy(s, conn)
