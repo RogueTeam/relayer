@@ -25,6 +25,8 @@ func Test_WithDHT(t *testing.T) {
 	var DefaultSlogHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})
 	t.Run("Succeed", func(t *testing.T) {
 		t.Run("With Allowed Peers", func(t *testing.T) {
+			ctx, cancel := utils.NewContext()
+			defer cancel()
 			assertions := assert.New(t)
 
 			// Local service ===============================
@@ -125,7 +127,7 @@ func Test_WithDHT(t *testing.T) {
 					},
 				},
 			}
-			servicer, err := relayer.New(&servicerConfig)
+			servicer, err := relayer.New(ctx, &servicerConfig)
 			if !assertions.Nil(err, "failed to prepare servicer") {
 				return
 			}
@@ -183,7 +185,7 @@ func Test_WithDHT(t *testing.T) {
 					},
 				},
 			}
-			disallowedClient, err := relayer.New(&disallowedClientConfig)
+			disallowedClient, err := relayer.New(ctx, &disallowedClientConfig)
 			assertions.Nil(err, "failed to prepare client")
 
 			err = disallowedClient.Serve()
@@ -254,7 +256,7 @@ func Test_WithDHT(t *testing.T) {
 					},
 				},
 			}
-			client, err := relayer.New(&allowedClientConfig)
+			client, err := relayer.New(ctx, &allowedClientConfig)
 			if !assertions.Nil(err, "failed to prepare client") {
 				return
 			}
@@ -285,6 +287,8 @@ func Test_WithDHT(t *testing.T) {
 			}
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
+			ctx, cancel := utils.NewContext()
+			defer cancel()
 			assertions := assert.New(t)
 
 			// Local service ===============================
@@ -374,7 +378,7 @@ func Test_WithDHT(t *testing.T) {
 					},
 				},
 			}
-			servicer, err := relayer.New(&servicerConfig)
+			servicer, err := relayer.New(ctx, &servicerConfig)
 			assertions.Nil(err, "failed to prepare servicer")
 
 			err = servicer.Serve()
@@ -434,7 +438,7 @@ func Test_WithDHT(t *testing.T) {
 					},
 				},
 			}
-			allowedClient, err := relayer.New(&clientConfig)
+			allowedClient, err := relayer.New(ctx, &clientConfig)
 			assertions.Nil(err, "failed to prepare client")
 
 			err = allowedClient.Serve()

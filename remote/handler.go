@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/ringqueue"
 	"github.com/RogueTeam/relayer/internal/set"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/ipfs/go-cid"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -23,6 +25,7 @@ import (
 )
 
 type Remote struct {
+	RefreshTimeout  time.Duration
 	RefreshInterval time.Duration
 	// Name of the remote service
 	// This should be the same as the one advertised by remote
@@ -43,10 +46,12 @@ type Handler struct {
 	host   host.Host
 	dht    *dht.IpfsDHT
 
-	running    atomic.Bool
-	l          manet.Listener
-	peersQueue *ringqueue.Queue[peer.ID]
-	remote     *Remote
+	running      atomic.Bool
+	l            manet.Listener
+	peersQueue   *ringqueue.Queue[peer.ID]
+	remote       *Remote
+	allowedPeers set.Set[peer.ID]
+	cid          cid.Cid
 }
 
 type Config struct {
@@ -55,7 +60,9 @@ type Config struct {
 	DHT    *dht.IpfsDHT
 }
 
-func New(cfg *Config, remote *Remote) (h *Handler, err error) {
+// Setups a remote connection handler
+// the passed context is used only during configuration
+func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err error) {
 	h = &Handler{
 		logger: cfg.Logger.With(
 			"kind", "service",
@@ -63,14 +70,13 @@ func New(cfg *Config, remote *Remote) (h *Handler, err error) {
 			"id", cfg.Host.ID(),
 			"interval", remote.RefreshInterval,
 		),
-		host:       cfg.Host,
-		dht:        cfg.DHT,
-		peersQueue: ringqueue.New[peer.ID](),
-		remote:     remote,
+		host:         cfg.Host,
+		dht:          cfg.DHT,
+		peersQueue:   ringqueue.New[peer.ID](),
+		remote:       remote,
+		allowedPeers: set.New(remote.AllowedPeers...),
+		cid:          peers.IdentityCidFromData(remote.Name),
 	}
-
-	ctx, cancel := utils.NewContext()
-	defer cancel()
 	err = h.bind(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to bind handler: %w", err)
@@ -115,17 +121,67 @@ func (h *Handler) bindWithRemoteAddresses(ctx context.Context) (err error) {
 	return nil
 }
 
+func (h *Handler) doWork(logger *slog.Logger) (err error) {
+	var timeout = h.remote.RefreshTimeout
+	if timeout == 0 {
+		timeout = utils.DefaultTimeout
+	}
+
+	logger.Debug("Pulling providers")
+	ctx, cancel := utils.NewContextWithTimeout(timeout)
+	defer cancel()
+	providers, err := h.dht.FindProviders(ctx, h.cid)
+	if err != nil {
+		logger.Error("failed to find providers", "error-msg", err.Error())
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, addrInfo := range providers {
+		wg.Go(func() {
+			logger := logger.With("addr-info", addrInfo.String())
+			logger.Debug("Found service provider")
+			logger.Debug("Reconnecting")
+			err = h.host.Connect(ctx, addrInfo)
+			if err != nil {
+				logger.Error("failed to connect to provider", "error-msg", err.Error())
+				return
+			}
+		})
+	}
+
+	wg.Wait()
+
+	peersIds := peer.AddrInfosToIDs(providers)
+
+	if len(h.allowedPeers) > 0 {
+		peersIds = slices.DeleteFunc(peersIds, func(e peer.ID) bool {
+			return h.allowedPeers.Has(e)
+		})
+	}
+
+	if len(peersIds) == 0 {
+		logger.Info("no peers providers received")
+		return
+	}
+
+	// At this point the peers ids list is not empty
+	err = h.peersQueue.Set(peersIds)
+	if err != nil {
+		logger.Error("failed to prepare peers queue", "error-msg", err)
+		return
+	}
+	return nil
+}
+
 func (h *Handler) bindWithDHT(ctx context.Context) (err error) {
 	logger := h.logger.With("mode", "dht")
 	logger.Info("Using DHT truth of source")
-
-	cid := peers.IdentityCidFromData(h.remote.Name)
 
 	// Spawn worker that retrieves providers of the requested service.
 	go func() {
 		logger.Info("Pulling providers worker")
 		defer logger.Info("Stopped pulling providers worker")
-		allowedPeers := set.New(h.remote.AllowedPeers...)
 
 		var interval = h.remote.RefreshInterval
 		if interval == 0 {
@@ -134,51 +190,10 @@ func (h *Handler) bindWithDHT(ctx context.Context) (err error) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for h.running.Load() {
-			func() {
-				logger.Debug("Pulling providers")
-				ctx, cancel := utils.NewContext()
-				defer cancel()
-				providers, err := h.dht.FindProviders(ctx, cid)
-				if err != nil {
-					logger.Error("failed to find providers", "error-msg", err.Error())
-					return
-				}
-
-				for _, addrInfo := range providers {
-					logger := logger.With("addr-info", addrInfo.String())
-					logger.Debug("Found service provider")
-					go func() {
-
-						logger.Debug("Reconnecting")
-						ctx, cancel := utils.NewContext()
-						defer cancel()
-						err = h.host.Connect(ctx, addrInfo)
-						if err != nil {
-							logger.Error("failed to connect to provider", "error-msg", err.Error())
-							return
-						}
-					}()
-				}
-				peersIds := peer.AddrInfosToIDs(providers)
-
-				if len(allowedPeers) > 0 {
-					peersIds = slices.DeleteFunc(peersIds, func(e peer.ID) bool {
-						return allowedPeers.Has(e)
-					})
-				}
-
-				if len(peersIds) == 0 {
-					logger.Info("no peers providers received")
-					return
-				}
-
-				// At this point the peers ids list is not empty
-				err = h.peersQueue.Set(peersIds)
-				if err != nil {
-					logger.Error("failed to prepare peers queue", "error-msg", err)
-					return
-				}
-			}()
+			err = h.doWork(logger)
+			if err != nil {
+				logger.Error("failed to do work", "error-msg", err.Error())
+			}
 			<-ticker.C
 		}
 	}()

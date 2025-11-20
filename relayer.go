@@ -1,6 +1,7 @@
 package relayer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -97,7 +98,7 @@ func (c *Config) Validate() (err error) {
 }
 
 // Create a new instance of the relayer
-func New(cfg *Config) (r *Relayer, err error) {
+func New(ctx context.Context, cfg *Config) (r *Relayer, err error) {
 	err = cfg.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate configuration: %w", err)
@@ -134,7 +135,7 @@ func New(cfg *Config) (r *Relayer, err error) {
 			Host:   r.host,
 			DHT:    r.dht,
 		}
-		rmt, err := remote.New(&cfg, entry)
+		rmt, err := remote.New(ctx, &cfg, entry)
 		if err != nil {
 			return nil, fmt.Errorf("failed to register reomte: %s: %w", entry.Name, err)
 		}

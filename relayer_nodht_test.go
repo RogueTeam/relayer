@@ -21,6 +21,8 @@ func Test_NoDHT(t *testing.T) {
 	var DefaultSlogHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	t.Run("Succeed", func(t *testing.T) {
 		t.Run("With Allowed Peers", func(t *testing.T) {
+			ctx, cancel := utils.NewContext()
+			defer cancel()
 			assertions := assert.New(t)
 
 			// Local service ===============================
@@ -79,7 +81,7 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			servicer, err := relayer.New(&servicerConfig)
+			servicer, err := relayer.New(ctx, &servicerConfig)
 			assertions.Nil(err, "failed to prepare servicer")
 
 			err = servicer.Serve()
@@ -116,7 +118,7 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			disallowedClient, err := relayer.New(&disallowedClientConfig)
+			disallowedClient, err := relayer.New(ctx, &disallowedClientConfig)
 			assertions.Nil(err, "failed to prepare client")
 
 			err = disallowedClient.Serve()
@@ -162,7 +164,7 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			client, err := relayer.New(&allowedClientConfig)
+			client, err := relayer.New(ctx, &allowedClientConfig)
 			assertions.Nil(err, "failed to prepare client")
 
 			err = client.Serve()
@@ -181,6 +183,8 @@ func Test_NoDHT(t *testing.T) {
 			assertions.Equal(payload, recv, "doesn't match")
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
+			ctx, cancel := utils.NewContext()
+			defer cancel()
 			assertions := assert.New(t)
 
 			// Local service ===============================
@@ -228,7 +232,7 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			servicer, err := relayer.New(&servicerConfig)
+			servicer, err := relayer.New(ctx, &servicerConfig)
 			assertions.Nil(err, "failed to prepare servicer")
 
 			err = servicer.Serve()
@@ -270,7 +274,7 @@ func Test_NoDHT(t *testing.T) {
 					},
 				},
 			}
-			allowedClient, err := relayer.New(&clientConfig)
+			allowedClient, err := relayer.New(ctx, &clientConfig)
 			assertions.Nil(err, "failed to prepare client")
 
 			err = allowedClient.Serve()
