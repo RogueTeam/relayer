@@ -267,7 +267,7 @@ var Run = &cli.Command{
 		}
 
 		log.Println("Preparing relayer")
-		r, err := relayer.New(&relayerConf)
+		r, err := relayer.New(ctx, &relayerConf)
 		if err != nil {
 			return fmt.Errorf("failed to create relayer: %w", err)
 		}
