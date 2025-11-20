@@ -10,6 +10,7 @@ import (
 	"github.com/RogueTeam/relayer"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/RogueTeam/relayer/remote"
 	"github.com/RogueTeam/relayer/service"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
@@ -174,7 +175,7 @@ func Test_WithDHT(t *testing.T) {
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   disallowedClientHost,
 				DHT:    disallowedClientDht,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
 						Name:            "RAW",
@@ -245,7 +246,7 @@ func Test_WithDHT(t *testing.T) {
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   allowedClientHost,
 				DHT:    allowedDht,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
 						Name:            "RAW",
@@ -425,7 +426,7 @@ func Test_WithDHT(t *testing.T) {
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   clientHost,
 				DHT:    clientDht,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
 						Name:            "RAW",

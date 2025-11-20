@@ -15,6 +15,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/mdnsutils"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/system"
+	"github.com/RogueTeam/relayer/remote"
 	"github.com/RogueTeam/relayer/service"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
@@ -239,13 +240,13 @@ var Run = &cli.Command{
 			log.Println("MDNS is disabled")
 		}
 
-		var remotes []relayer.Remote
-		for _, remote := range config.Remotes {
-			remotes = append(remotes, relayer.Remote{
-				Name:          remote.Name,
-				ListenAddress: remote.ListenAddress,
-				Addresses:     remote.Addresses,
-				AllowedPeers:  remote.AllowedPeers,
+		var remotes []*remote.Remote
+		for _, rmt := range config.Remotes {
+			remotes = append(remotes, &remote.Remote{
+				Name:          rmt.Name,
+				ListenAddress: rmt.ListenAddress,
+				Addresses:     rmt.Addresses,
+				AllowedPeers:  rmt.AllowedPeers,
 			})
 		}
 		var svcs = make([]*service.Service, 0, len(config.Services))

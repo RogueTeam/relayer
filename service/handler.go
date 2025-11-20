@@ -19,10 +19,13 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-type Service struct {
+type Config struct {
 	Logger *slog.Logger
 	Host   host.Host
 	DHT    *dht.IpfsDHT
+}
+
+type Service struct {
 	// Name of the service to advertise
 	Name string
 	// Addresses to advertise the service. If more than one address is used it will work as a load balancer.
@@ -35,16 +38,16 @@ type Service struct {
 	AdvertiseInterval time.Duration
 }
 
-func Register(svc *Service) (h *Handler, err error) {
+func Register(cfg *Config, svc *Service) (h *Handler, err error) {
 	h = &Handler{
-		logger: svc.Logger.With(
+		logger: cfg.Logger.With(
 			"kind", "service",
 			"name", svc.Name,
-			"id", svc.Host.ID(),
+			"id", cfg.Host.ID(),
 			"interval", svc.AdvertiseInterval,
 		),
-		host:              svc.Host,
-		dht:               svc.DHT,
+		host:              cfg.Host,
+		dht:               cfg.DHT,
 		name:              svc.Name,
 		addresses:         svc.Addresses,
 		allowedPeers:      svc.AllowedPeers,

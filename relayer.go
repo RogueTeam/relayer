@@ -5,37 +5,25 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/RogueTeam/relayer/remote"
 	"github.com/RogueTeam/relayer/service"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
-	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 type Relayer struct {
 	logger *slog.Logger
 	host   host.Host
 	dht    *dht.IpfsDHT
-	remote []Remote
 
+	remotes  []*remote.Handler
 	services []*service.Handler
-
-	running         bool
-	remoteListeners map[string]manet.Listener
 }
 
 // Binds remotes and handle connection for them.
 // This function returns immediatly.
 // Make sure to call Close
 func (r *Relayer) Serve() (err error) {
-	r.running = true
-	// Bind remote services locally
-	for _, remote := range r.remote {
-		err = r.bindRemote(&remote)
-		if err != nil {
-			return fmt.Errorf("failed to bind remote: %s: %w", remote.Name, err)
-		}
-	}
-
 	return nil
 }
 
@@ -43,13 +31,11 @@ func (r *Relayer) Serve() (err error) {
 // This function is responsible of unregistering services and stoping
 // remote binds. DHT and Host is maintained open
 func (r *Relayer) Close() (err error) {
-	r.running = false
-
-	for name, remote := range r.remoteListeners {
-		r.logger.Info("Stopping remote", "name", name)
+	for _, remote := range r.remotes {
+		r.logger.Info("Stopping remote", "name", remote.Name())
 		err = remote.Close()
 		if err != nil {
-			r.logger.Error("Failed to stop remote", "name", name, "error-msg", err.Error())
+			r.logger.Error("Failed to stop remote", "name", remote.Name(), "error-msg", err.Error())
 		}
 	}
 
@@ -71,7 +57,7 @@ type Config struct {
 	// Optional DHT for advertising services
 	DHT *dht.IpfsDHT
 	// Remote servers to be binded locally
-	Remote []Remote
+	Remote []*remote.Remote
 	// Local services to be promoted
 	Services []*service.Service
 }
@@ -117,11 +103,9 @@ func New(cfg *Config) (r *Relayer, err error) {
 		return nil, fmt.Errorf("failed to validate configuration: %w", err)
 	}
 	r = &Relayer{
-		logger:          cfg.Logger,
-		host:            cfg.Host,
-		dht:             cfg.DHT,
-		remote:          cfg.Remote,
-		remoteListeners: make(map[string]manet.Listener),
+		logger: cfg.Logger,
+		host:   cfg.Host,
+		dht:    cfg.DHT,
 	}
 
 	defer func() {
@@ -132,12 +116,39 @@ func New(cfg *Config) (r *Relayer, err error) {
 		r.Close()
 	}()
 
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		for _, rmt := range r.remotes {
+			rmt.Close()
+		}
+		for _, svc := range r.services {
+			svc.Close()
+		}
+	}()
+	for _, entry := range cfg.Remote {
+		var cfg = remote.Config{
+			Logger: r.logger,
+			Host:   r.host,
+			DHT:    r.dht,
+		}
+		rmt, err := remote.New(&cfg, entry)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register reomte: %s: %w", entry.Name, err)
+		}
+		r.remotes = append(r.remotes, rmt)
+	}
+
 	// Spawn host handlers for services
 	for _, svc := range cfg.Services {
-		svc.Logger = r.logger
-		svc.Host = r.host
-		svc.DHT = r.dht
-		handler, err := service.Register(svc)
+		var cfg = service.Config{
+			Logger: r.logger,
+			Host:   r.host,
+			DHT:    r.dht,
+		}
+		handler, err := service.Register(&cfg, svc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to register service: %s: %w", svc.Name, err)
 		}

@@ -8,6 +8,7 @@ import (
 	"github.com/RogueTeam/relayer"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/RogueTeam/relayer/remote"
 	"github.com/RogueTeam/relayer/service"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -107,7 +108,7 @@ func Test_NoDHT(t *testing.T) {
 			disallowedClientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   disallowedClientHost,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						Name:          "RAW",
 						ListenAddress: disallowedBindListener.Multiaddr(),
@@ -153,7 +154,7 @@ func Test_NoDHT(t *testing.T) {
 			allowedClientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   allowedClientHost,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						Name:          "RAW",
 						ListenAddress: allowedBindListener.Multiaddr(),
@@ -261,7 +262,7 @@ func Test_NoDHT(t *testing.T) {
 			clientConfig := relayer.Config{
 				Logger: slog.New(DefaultSlogHandler),
 				Host:   clientHost,
-				Remote: []relayer.Remote{
+				Remote: []*remote.Remote{
 					{
 						Name:          "RAW",
 						ListenAddress: tempBindListener.Multiaddr(),
