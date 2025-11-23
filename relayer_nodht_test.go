@@ -3,6 +3,7 @@ package relayer_test
 import (
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/RogueTeam/relayer"
@@ -18,6 +19,7 @@ import (
 )
 
 func Test_NoDHT(t *testing.T) {
+	var Payload = []byte(strings.Repeat("Hello world", 1024))
 	var DefaultSlogHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
 	t.Run("Succeed", func(t *testing.T) {
 		t.Run("With Allowed Peers", func(t *testing.T) {
@@ -32,7 +34,6 @@ func Test_NoDHT(t *testing.T) {
 			}
 			defer localListener.Close()
 
-			var payload = []byte("HELLO WORLD")
 			go func() {
 				conn, err := localListener.Accept()
 				if !assertions.Nil(err, "failed to accept connection") {
@@ -40,7 +41,7 @@ func Test_NoDHT(t *testing.T) {
 				}
 				defer conn.Close()
 
-				conn.Write(payload)
+				conn.Write(Payload)
 			}()
 			// Prepare identities ==========================
 			servicerIdentity, err := identity.NewKey()
@@ -130,11 +131,11 @@ func Test_NoDHT(t *testing.T) {
 			assertions.Nil(err, "failed to dial to binded address")
 			defer conn.Close()
 
-			var recv = make([]byte, len(payload))
+			var recv = make([]byte, len(Payload))
 			_, err = conn.Read(recv)
 			assertions.NotNil(err, "failed to read")
 
-			assertions.NotEqual(payload, recv, "doesn't match")
+			assertions.NotEqual(Payload, recv, "doesn't match")
 
 			// Prepare allowed client ======================
 			allowedClientHost, err := libp2p.New(
@@ -176,11 +177,11 @@ func Test_NoDHT(t *testing.T) {
 			assertions.Nil(err, "failed to dial to binded address")
 			defer conn.Close()
 
-			recv = make([]byte, len(payload))
+			recv = make([]byte, len(Payload))
 			_, err = conn.Read(recv)
 			assertions.Nil(err, "failed to read")
 
-			assertions.Equal(payload, recv, "doesn't match")
+			assertions.Equal(Payload, recv, "doesn't match")
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
 			ctx, cancel := utils.NewContext()
@@ -194,7 +195,6 @@ func Test_NoDHT(t *testing.T) {
 			}
 			defer localListener.Close()
 
-			var payload = []byte("HELLO WORLD")
 			go func() {
 				conn, err := localListener.Accept()
 				if !assertions.Nil(err, "failed to accept connection") {
@@ -202,7 +202,7 @@ func Test_NoDHT(t *testing.T) {
 				}
 				defer conn.Close()
 
-				conn.Write(payload)
+				conn.Write(Payload)
 			}()
 
 			// Prepare services ============================
@@ -285,11 +285,11 @@ func Test_NoDHT(t *testing.T) {
 			assertions.Nil(err, "failed to dial to binded address")
 			defer conn.Close()
 
-			var recv = make([]byte, len(payload))
+			var recv = make([]byte, len(Payload))
 			_, err = conn.Read(recv)
 			assertions.Nil(err, "failed to read")
 
-			assertions.Equal(payload, recv, "doesn't match")
+			assertions.Equal(Payload, recv, "doesn't match")
 		})
 	})
 }
