@@ -1,7 +1,6 @@
 package remote
 
 import (
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/set"
 	"github.com/RogueTeam/relayer/internal/utils"
 	"github.com/ipfs/go-cid"
+	"github.com/klauspost/compress/zstd"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -220,8 +220,8 @@ func (h *Handler) processConnection(conn manet.Conn) (err error) {
 
 	logger.Info("Connected")
 
-	go ioutils.CopyToGzip(s, conn, gzip.BestCompression)
-	_, err = ioutils.CopyFromGzip(conn, s)
+	go ioutils.CopyToZstd(s, conn, zstd.SpeedBestCompression)
+	_, err = ioutils.CopyFromZstd(conn, s)
 	if err != nil {
 		return fmt.Errorf("failed to copy from stream to local connection: %w", err)
 	}

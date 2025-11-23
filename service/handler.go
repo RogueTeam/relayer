@@ -1,7 +1,6 @@
 package service
 
 import (
-	"compress/gzip"
 	"fmt"
 	"log/slog"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/ringqueue"
 	"github.com/RogueTeam/relayer/internal/set"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/klauspost/compress/zstd"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -120,8 +120,8 @@ func (h *Handler) registerService() (err error) {
 		defer conn.Close()
 
 		logger.Debug("Serving")
-		go ioutils.CopyToGzip(s, conn, gzip.BestCompression)
-		_, err = ioutils.CopyFromGzip(conn, s)
+		go ioutils.CopyToZstd(s, conn, zstd.SpeedBestCompression)
+		_, err = ioutils.CopyFromZstd(conn, s)
 		if err != nil {
 			logger.Error("failed to copy from stream to service", "error-msg", err.Error())
 		}

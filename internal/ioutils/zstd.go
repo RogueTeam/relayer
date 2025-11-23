@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zstd"
 )
 
-const BufferSize = 32 * 1024
-
-func CopyFromGzip(dst io.Writer, src io.Reader) (n int64, err error) {
-	dec, err := gzip.NewReader(src)
+func CopyFromZstd(dst io.Writer, src io.Reader) (n int64, err error) {
+	dec, err := zstd.NewReader(src)
 	if err != nil {
-		return 0, fmt.Errorf("failed to prepare gzip reader: %w", err)
+		return 0, fmt.Errorf("failed to prepare zstd reader: %w", err)
 	}
 
 	var buffer = make([]byte, BufferSize)
@@ -31,16 +29,16 @@ func CopyFromGzip(dst io.Writer, src io.Reader) (n int64, err error) {
 			if errors.Is(err, io.EOF) {
 				return n, nil
 			}
-			return n, fmt.Errorf("failed to read from gzip source: %w", err)
+			return n, fmt.Errorf("failed to read from zstd source: %w", err)
 		}
 
 	}
 }
 
-func CopyToGzip(dst io.Writer, src io.Reader, level int) (n int64, err error) {
-	enc, err := gzip.NewWriterLevel(dst, level)
+func CopyToZstd(dst io.Writer, src io.Reader, level zstd.EncoderLevel) (n int64, err error) {
+	enc, err := zstd.NewWriter(dst, zstd.WithEncoderLevel(level))
 	if err != nil {
-		return 0, fmt.Errorf("failed to prepare gzip writer: %w", err)
+		return 0, fmt.Errorf("failed to prepare zstd writer: %w", err)
 	}
 
 	var buffer = make([]byte, BufferSize)
