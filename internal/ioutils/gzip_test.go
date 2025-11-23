@@ -2,6 +2,7 @@ package ioutils_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,7 +32,7 @@ func Test_GzipCopy(t *testing.T) {
 				var payload = []byte(strings.Repeat("Hello world!!!\n", test.Repeat))
 
 				var compressBuffer bytes.Buffer
-				_, err := ioutils.CopyToGzip(&compressBuffer, bytes.NewReader(payload))
+				_, err := ioutils.CopyToGzip(&compressBuffer, bytes.NewReader(payload), gzip.BestCompression)
 				if !assertions.Nil(err, "failed to copy to zstd") {
 					return
 				}

@@ -1,16 +1,17 @@
 package remote
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/RogueTeam/relayer/internal/ioutils"
 	"github.com/RogueTeam/relayer/internal/p2p/peers"
 	"github.com/RogueTeam/relayer/internal/ringqueue"
 	"github.com/RogueTeam/relayer/internal/set"
@@ -219,8 +220,11 @@ func (h *Handler) processConnection(conn manet.Conn) (err error) {
 
 	logger.Info("Connected")
 
-	go io.Copy(s, conn)
-	io.Copy(conn, s)
+	go ioutils.CopyToGzip(s, conn, gzip.BestCompression)
+	_, err = ioutils.CopyFromGzip(conn, s)
+	if err != nil {
+		return fmt.Errorf("failed to copy from stream to local connection: %w", err)
+	}
 	return nil
 }
 

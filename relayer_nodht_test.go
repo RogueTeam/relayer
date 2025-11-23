@@ -41,6 +41,7 @@ func Test_NoDHT(t *testing.T) {
 				}
 				defer conn.Close()
 
+				t.Log("Writing buffer")
 				conn.Write(Payload)
 			}()
 			// Prepare identities ==========================
@@ -128,14 +129,20 @@ func Test_NoDHT(t *testing.T) {
 
 			// Test disallowed client ======================
 			conn, err := manet.Dial(disallowedBindListener.Multiaddr())
-			assertions.Nil(err, "failed to dial to binded address")
+			if !assertions.Nil(err, "failed to dial to binded address") {
+				return
+			}
 			defer conn.Close()
 
+			t.Log("Reading from disallowed peer")
 			var recv = make([]byte, len(Payload))
 			_, err = conn.Read(recv)
-			assertions.NotNil(err, "failed to read")
-
-			assertions.NotEqual(Payload, recv, "doesn't match")
+			if !assertions.NotNil(err, "failed to read") {
+				return
+			}
+			if !assertions.NotEqual(Payload, recv, "doesn't match") {
+				return
+			}
 
 			// Prepare allowed client ======================
 			allowedClientHost, err := libp2p.New(
@@ -173,15 +180,23 @@ func Test_NoDHT(t *testing.T) {
 			defer client.Close()
 
 			// Test allowed client =========================
+			t.Log("Reading from allowed peer")
 			conn, err = manet.Dial(allowedBindListener.Multiaddr())
-			assertions.Nil(err, "failed to dial to binded address")
+			if !assertions.Nil(err, "failed to dial to binded address") {
+				return
+			}
 			defer conn.Close()
 
 			recv = make([]byte, len(Payload))
 			_, err = conn.Read(recv)
-			assertions.Nil(err, "failed to read")
+			if !assertions.Nil(err, "failed to read") {
+				return
+			}
+			t.Log("Readed from allowed peer, comparing data")
 
-			assertions.Equal(Payload, recv, "doesn't match")
+			if !assertions.Equal(Payload, recv, "doesn't match") {
+				return
+			}
 		})
 		t.Run("No Allowed Peers", func(t *testing.T) {
 			ctx, cancel := utils.NewContext()

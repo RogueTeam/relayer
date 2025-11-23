@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/klauspost/compress/gzip"
 )
@@ -20,6 +21,7 @@ func CopyFromGzip(dst io.Writer, src io.Reader) (n int64, err error) {
 	for {
 		readN, err := dec.Read(buffer)
 		n += int64(readN)
+		log.Println("Compressed:", readN)
 		if readN > 0 {
 			_, err := dst.Write(buffer[:readN])
 			if err != nil {
@@ -37,8 +39,8 @@ func CopyFromGzip(dst io.Writer, src io.Reader) (n int64, err error) {
 	}
 }
 
-func CopyToGzip(dst io.Writer, src io.Reader) (n int64, err error) {
-	enc, err := gzip.NewWriterLevel(dst, gzip.BestSpeed)
+func CopyToGzip(dst io.Writer, src io.Reader, level int) (n int64, err error) {
+	enc, err := gzip.NewWriterLevel(dst, level)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare gzip writer: %w", err)
 	}
@@ -47,23 +49,32 @@ func CopyToGzip(dst io.Writer, src io.Reader) (n int64, err error) {
 	for {
 		readN, err := src.Read(buffer)
 		n += int64(readN)
+		log.Println("Uncompressed:", readN)
+
+		if readN > 0 {
+			enc.Reset(dst)
+
+			_, err := enc.Write(buffer[:readN])
+			if err != nil {
+				return n, fmt.Errorf("failed to write contents: %w", err)
+			}
+
+			err = enc.Flush()
+			if err != nil {
+				return n, fmt.Errorf("falied to flush encoder: %w", err)
+			}
+
+			err = enc.Close()
+			if err != nil {
+				return n, fmt.Errorf("failed to close encoder: %w", err)
+			}
+		}
+
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return n, nil
 			}
 			return n, fmt.Errorf("failed to read from plain source: %w", err)
-		}
-
-		enc.Reset(dst)
-
-		_, err = enc.Write(buffer[:readN])
-		if err != nil {
-			return n, fmt.Errorf("failed to write contents: %w", err)
-		}
-
-		err = enc.Close()
-		if err != nil {
-			return n, fmt.Errorf("failed to close encoder: %w", err)
 		}
 	}
 }

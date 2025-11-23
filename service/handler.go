@@ -1,11 +1,12 @@
 package service
 
 import (
+	"compress/gzip"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
+	"github.com/RogueTeam/relayer/internal/ioutils"
 	"github.com/RogueTeam/relayer/internal/p2p/peers"
 	"github.com/RogueTeam/relayer/internal/ringqueue"
 	"github.com/RogueTeam/relayer/internal/set"
@@ -119,8 +120,11 @@ func (h *Handler) registerService() (err error) {
 		defer conn.Close()
 
 		logger.Debug("Serving")
-		go io.Copy(s, conn)
-		io.Copy(conn, s)
+		go ioutils.CopyToGzip(s, conn, gzip.BestCompression)
+		_, err = ioutils.CopyFromGzip(conn, s)
+		if err != nil {
+			logger.Error("failed to copy from stream to service", "error-msg", err.Error())
+		}
 	})
 
 	if h.advertise {
