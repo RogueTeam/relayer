@@ -103,7 +103,7 @@ func New(ctx context.Context, cfg *Config) (r *Relayer, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate configuration: %w", err)
 	}
-	r = &Relayer{
+	relayer := &Relayer{
 		logger: cfg.Logger,
 		host:   cfg.Host,
 		dht:    cfg.DHT,
@@ -114,7 +114,7 @@ func New(ctx context.Context, cfg *Config) (r *Relayer, err error) {
 			return
 		}
 
-		r.Close()
+		relayer.Close()
 	}()
 
 	defer func() {
@@ -122,38 +122,38 @@ func New(ctx context.Context, cfg *Config) (r *Relayer, err error) {
 			return
 		}
 
-		for _, rmt := range r.remotes {
+		for _, rmt := range relayer.remotes {
 			rmt.Close()
 		}
-		for _, svc := range r.services {
+		for _, svc := range relayer.services {
 			svc.Close()
 		}
 	}()
 	for _, entry := range cfg.Remote {
 		var cfg = remote.Config{
-			Logger: r.logger,
-			Host:   r.host,
-			DHT:    r.dht,
+			Logger: relayer.logger,
+			Host:   relayer.host,
+			DHT:    relayer.dht,
 		}
 		rmt, err := remote.New(ctx, &cfg, entry)
 		if err != nil {
 			return nil, fmt.Errorf("failed to register reomte: %s: %w", entry.Name, err)
 		}
-		r.remotes = append(r.remotes, rmt)
+		relayer.remotes = append(relayer.remotes, rmt)
 	}
 
 	// Spawn host handlers for services
 	for _, svc := range cfg.Services {
 		var cfg = service.Config{
-			Logger: r.logger,
-			Host:   r.host,
-			DHT:    r.dht,
+			Logger: relayer.logger,
+			Host:   relayer.host,
+			DHT:    relayer.dht,
 		}
 		handler, err := service.Register(&cfg, svc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to register service: %s: %w", svc.Name, err)
 		}
-		r.services = append(r.services, handler)
+		relayer.services = append(relayer.services, handler)
 	}
-	return r, nil
+	return relayer, nil
 }
