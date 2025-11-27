@@ -66,7 +66,7 @@ type Config struct {
 func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err error) {
 	h = &Handler{
 		logger: cfg.Logger.With(
-			"kind", "service",
+			"kind", "remote",
 			"name", remote.Name,
 			"id", cfg.Host.ID(),
 			"interval", remote.RefreshInterval,
