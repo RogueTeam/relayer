@@ -3,6 +3,7 @@ module github.com/RogueTeam/relayer
 go 1.24.5
 
 require (
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/ipfs/go-cid v0.5.0
 	github.com/ipfs/go-datastore v0.8.3
 	github.com/klauspost/compress v1.18.0
