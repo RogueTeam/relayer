@@ -15,6 +15,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/mdnsutils"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/system"
+	"github.com/RogueTeam/relayer/proxy"
 	"github.com/RogueTeam/relayer/remote"
 	"github.com/RogueTeam/relayer/service"
 	"github.com/ipfs/go-datastore"
@@ -23,6 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
@@ -40,6 +42,7 @@ type (
 	}
 	Remote struct {
 		Name          string                `yaml:"name"`
+		Host          string                `yaml:"host"`
 		ListenAddress multiaddr.Multiaddr   `yaml:"listen"`
 		Addresses     []multiaddr.Multiaddr `yaml:"addrs"`
 		AllowedPeers  []peer.ID             `yaml:"allowed-peers"`
@@ -50,7 +53,12 @@ type (
 		AllowedPeers []peer.ID             `yaml:"allowed-peers"`
 		Advertise    bool                  `yaml:"advertise"`
 	}
+	Proxy struct {
+		ListenAddr multiaddr.Multiaddr `yaml:"listen-addr"`
+		Hostname   string              `yaml:"hostname"`
+	}
 	Config struct {
+		Proxy              *Proxy                `yaml:"proxy,omitempty"`
 		Listen             []multiaddr.Multiaddr `yaml:"listen"`
 		AdvertiseAddresses []multiaddr.Multiaddr `yaml:"advertise-addrs"`
 		IdentityFile       string                `yaml:"identity-file"`
@@ -79,8 +87,13 @@ var Example = Config{
 	Remotes: []Remote{
 		{
 			Name:          "HTTP",
+			Host:          "http",
 			ListenAddress: multiaddr.StringCast("/ip4/10.0.0.4/tcp/8080"),
 		},
+	},
+	Proxy: &Proxy{
+		ListenAddr: multiaddr.StringCast("/ip4/127.0.0.1/tcp/9595"),
+		Hostname:   "rogueteam.com",
 	},
 	Services: []Service{
 		{
@@ -155,6 +168,28 @@ var Run = &cli.Command{
 		err = yaml.Unmarshal(configContents, &config)
 		if err != nil {
 			return fmt.Errorf("failed to parse configuration: %w", err)
+		}
+
+		var p *proxy.Proxy
+		if config.Proxy != nil {
+			log.Println("Configuring proxy")
+			p, err = proxy.New(config.Proxy.Hostname)
+			if err != nil {
+				return fmt.Errorf("failed to prepare proxy: %w", err)
+			}
+
+			l, err := manet.Listen(config.Proxy.ListenAddr)
+			if err != nil {
+				return fmt.Errorf("failed to listen for proxy addr: %w", err)
+			}
+			defer l.Close()
+
+			go func() {
+				err := p.Serve(manet.NetListener(l))
+				if err != nil {
+					log.Fatal(err)
+				}
+			}()
 		}
 
 		log.Println("Configuration loaded")
@@ -244,6 +279,7 @@ var Run = &cli.Command{
 		for _, rmt := range config.Remotes {
 			remotes = append(remotes, &remote.Remote{
 				Name:          rmt.Name,
+				Host:          rmt.Host,
 				ListenAddress: rmt.ListenAddress,
 				Addresses:     rmt.Addresses,
 				AllowedPeers:  rmt.AllowedPeers,
@@ -262,6 +298,7 @@ var Run = &cli.Command{
 			Logger:   slog.Default(),
 			Host:     host,
 			DHT:      hostDht,
+			Proxy:    p,
 			Remote:   remotes,
 			Services: svcs,
 		}

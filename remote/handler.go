@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,7 @@ import (
 	"github.com/RogueTeam/relayer/internal/ringqueue"
 	"github.com/RogueTeam/relayer/internal/set"
 	"github.com/RogueTeam/relayer/internal/utils"
+	"github.com/RogueTeam/relayer/proxy"
 	"github.com/ipfs/go-cid"
 	"github.com/klauspost/compress/zstd"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -32,6 +34,8 @@ type Remote struct {
 	// Name of the remote service
 	// This should be the same as the one advertised by remote
 	Name string
+	// Name used for handling the service with the configured proxy
+	Host string
 	// Listen address for incoming requests
 	ListenAddress multiaddr.Multiaddr
 	// Optional. Remote peers address from which consume the remote service
@@ -47,6 +51,7 @@ type Handler struct {
 	logger *slog.Logger
 	host   host.Host
 	dht    *dht.IpfsDHT
+	proxy  *proxy.Proxy
 
 	running      atomic.Bool
 	l            manet.Listener
@@ -60,6 +65,7 @@ type Config struct {
 	Logger *slog.Logger
 	Host   host.Host
 	DHT    *dht.IpfsDHT
+	Proxy  *proxy.Proxy
 }
 
 // Setups a remote connection handler
@@ -67,13 +73,14 @@ type Config struct {
 func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err error) {
 	h = &Handler{
 		logger: cfg.Logger.With(
-			"kind", "service",
+			"kind", "remote",
 			"name", remote.Name,
 			"id", cfg.Host.ID(),
 			"interval", remote.RefreshInterval,
 		),
 		host:         cfg.Host,
 		dht:          cfg.DHT,
+		proxy:        cfg.Proxy,
 		peersQueue:   ringqueue.New[peer.ID](),
 		remote:       remote,
 		allowedPeers: set.New(remote.AllowedPeers...),
@@ -274,16 +281,6 @@ func (h *Handler) Close() (err error) {
 
 func (h *Handler) bind(ctx context.Context) (err error) {
 	h.running.Store(true)
-	h.logger.Info("Binding")
-	h.l, err = manet.Listen(h.remote.ListenAddress)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			h.l.Close()
-		}
-	}()
 
 	if len(h.remote.Addresses) > 0 {
 		err = h.bindWithRemoteAddresses(ctx)
@@ -299,12 +296,45 @@ func (h *Handler) bind(ctx context.Context) (err error) {
 		return errors.New("can't resolve remote without a DHT")
 	}
 
-	go func() {
-		err := h.serve()
+	if h.remote.ListenAddress != nil {
+		h.logger.Info("Binding")
+		h.l, err = manet.Listen(h.remote.ListenAddress)
 		if err != nil {
-			h.logger.Error("error during serve", "error-msg", err.Error())
+			return fmt.Errorf("failed to listen: %w", err)
 		}
-	}()
+		defer func() {
+			if err != nil {
+				h.l.Close()
+			}
+		}()
+		go func() {
+			err := h.serve()
+			if err != nil {
+				h.logger.Error("error during serve", "error-msg", err.Error())
+			}
+		}()
+	}
+
+	if h.proxy != nil && h.remote.Host != "" {
+		h.logger.Info("Registering proxy host", "host", h.host)
+		h.proxy.Register(h.remote.Host, func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
+			if h.peersQueue.Empty() {
+				return nil, errors.New("no peers available")
+			}
+
+			target := h.peersQueue.Next()
+
+			logger := h.logger.With("target", target)
+			logger.Info("Proxying")
+
+			pid := protocol.ID(h.remote.Name)
+			s, err := h.host.NewStream(ctx, target, pid)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create new stream: %w", err)
+			}
+			return &ioutils.ZstdConn{Conn: &ioutils.TCPStreamConn{Stream: s}}, nil
+		})
+	}
 
 	return nil
 }
