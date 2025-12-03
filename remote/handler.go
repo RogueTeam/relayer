@@ -123,7 +123,7 @@ func (h *Handler) bindWithRemoteAddresses(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *Handler) doWork(logger *slog.Logger) (err error) {
+func (h *Handler) doBindWithDhtWork(interval time.Duration, logger *slog.Logger) (err error) {
 	var timeout = h.remote.RefreshTimeout
 	if timeout == 0 {
 		timeout = utils.DefaultTimeout
@@ -138,7 +138,7 @@ func (h *Handler) doWork(logger *slog.Logger) (err error) {
 		return
 	}
 
-	timeAgo := time.Now().Add(-h.remote.RefreshInterval)
+	timeAgo := time.Now().Add(-interval)
 	var wg sync.WaitGroup
 	for _, addrInfo := range providers {
 		wg.Go(func() {
@@ -204,7 +204,7 @@ func (h *Handler) bindWithDHT(ctx context.Context) (err error) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for h.running.Load() {
-			err = h.doWork(logger)
+			err = h.doBindWithDhtWork(interval, logger)
 			if err != nil {
 				logger.Error("failed to do work", "error-msg", err.Error())
 			}
