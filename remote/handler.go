@@ -19,6 +19,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
@@ -137,9 +138,21 @@ func (h *Handler) doWork(logger *slog.Logger) (err error) {
 		return
 	}
 
+	timeAgo := time.Now().Add(-h.remote.RefreshInterval)
 	var wg sync.WaitGroup
 	for _, addrInfo := range providers {
 		wg.Go(func() {
+
+			conns := h.host.Network().ConnsToPeer(addrInfo.ID)
+			for _, conn := range conns {
+				logger := logger.With("connection", conn.RemoteMultiaddr())
+				if conn.Stat().Opened.Before(timeAgo) || conn.Stat().Opened.Equal(timeAgo) {
+					logger.Debug("Connection closed")
+					conn.CloseWithError(network.ConnGarbageCollected)
+					conn.Close()
+				}
+			}
+
 			logger := logger.With("addr-info", addrInfo.String())
 			logger.Debug("Found service provider")
 			logger.Debug("Reconnecting")
