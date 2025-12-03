@@ -14,7 +14,7 @@ func HashedCidFromData[T string | []byte](data T) cid.Cid {
 	return cid.NewCidV1(uint64(multicodec.DagCbor), mh)
 }
 
-func IdentityCidFromData[T string | []byte](data T) cid.Cid {
+func IdentityCidFromData[T ~string | []byte](data T) cid.Cid {
 	bytes := []byte(data)
 
 	mh, _ := multihash.Sum(bytes, multihash.IDENTITY, -1)

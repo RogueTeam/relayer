@@ -27,8 +27,8 @@ type Config struct {
 }
 
 type Service struct {
-	// Name of the service to advertise
-	Name string
+	// Protocol of the service to advertise
+	Protocol protocol.ID
 	// Addresses to advertise the service. If more than one address is used it will work as a load balancer.
 	Addresses []multiaddr.Multiaddr
 	// Optional. Allowed peers to permit access to consume this service
@@ -43,13 +43,13 @@ func Register(cfg *Config, svc *Service) (h *Handler, err error) {
 	h = &Handler{
 		logger: cfg.Logger.With(
 			"kind", "service",
-			"name", svc.Name,
+			"name", svc.Protocol,
 			"id", cfg.Host.ID(),
 			"interval", svc.AdvertiseInterval,
 		),
 		host:              cfg.Host,
 		dht:               cfg.DHT,
-		name:              svc.Name,
+		protocol:          svc.Protocol,
 		addresses:         svc.Addresses,
 		allowedPeers:      svc.AllowedPeers,
 		advertise:         svc.Advertise,
@@ -67,7 +67,7 @@ type Handler struct {
 	host   host.Host
 	dht    *dht.IpfsDHT
 
-	name              string
+	protocol          protocol.ID
 	addresses         []multiaddr.Multiaddr
 	allowedPeers      []peer.ID
 	advertise         bool
@@ -75,7 +75,7 @@ type Handler struct {
 }
 
 func (h *Handler) advertiseAttempt() (err error) {
-	key := peers.IdentityCidFromData(h.name)
+	key := peers.IdentityCidFromData(h.protocol)
 	ctx, cancel := utils.NewContext()
 	defer cancel()
 	err = h.dht.Provide(ctx, key, true)
@@ -88,8 +88,6 @@ func (h *Handler) advertiseAttempt() (err error) {
 func (h *Handler) registerService() (err error) {
 	h.logger.Info("Registering service")
 
-	pid := protocol.ID(h.name)
-
 	q := ringqueue.New[multiaddr.Multiaddr]()
 	err = q.Set(h.addresses)
 	if err != nil {
@@ -98,7 +96,7 @@ func (h *Handler) registerService() (err error) {
 
 	allowedPeers := set.New(h.allowedPeers...)
 
-	h.host.SetStreamHandler(pid, func(s network.Stream) {
+	h.host.SetStreamHandler(h.protocol, func(s network.Stream) {
 		logger := h.logger.With("peer-id", s.Conn().RemotePeer(), "peer-addr", s.Conn().RemoteMultiaddr())
 		logger.Info("Received connection")
 		defer s.Close()
@@ -153,13 +151,13 @@ func (h *Handler) registerService() (err error) {
 	return nil
 }
 
-func (h *Handler) Name() (name string) {
-	return h.name
+func (h *Handler) Protocol() (protocol protocol.ID) {
+	return h.protocol
 }
 
 // Unregisters the handler for the host
 func (h *Handler) Close() (err error) {
 	h.logger.Info("Unregistering service from HOST")
-	h.host.RemoveStreamHandler(protocol.ID(h.name))
+	h.host.RemoveStreamHandler(h.protocol)
 	return nil
 }
