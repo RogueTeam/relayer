@@ -22,6 +22,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -41,14 +42,14 @@ type (
 		Peers   []multiaddr.Multiaddr `yaml:"bootstrap"`
 	}
 	Remote struct {
-		Name          string                `yaml:"name"`
+		Protocol      protocol.ID           `yaml:"protocol"`
 		Host          string                `yaml:"host"`
 		ListenAddress multiaddr.Multiaddr   `yaml:"listen"`
 		Addresses     []multiaddr.Multiaddr `yaml:"addrs"`
 		AllowedPeers  []peer.ID             `yaml:"allowed-peers"`
 	}
 	Service struct {
-		Name         string                `yaml:"name"`
+		Protocol     protocol.ID           `yaml:"protocol"`
 		Addresses    []multiaddr.Multiaddr `yaml:"addrs"`
 		AllowedPeers []peer.ID             `yaml:"allowed-peers"`
 		Advertise    bool                  `yaml:"advertise"`
@@ -86,7 +87,7 @@ var Example = Config{
 	MDNS: true,
 	Remotes: []Remote{
 		{
-			Name:          "HTTP",
+			Protocol:      "HTTP",
 			Host:          "http",
 			ListenAddress: multiaddr.StringCast("/ip4/10.0.0.4/tcp/8080"),
 		},
@@ -97,7 +98,7 @@ var Example = Config{
 	},
 	Services: []Service{
 		{
-			Name: "FTP",
+			Protocol: "FTP",
 			Addresses: []multiaddr.Multiaddr{
 				multiaddr.StringCast("/ip4/10.0.0.4/tcp/21"),
 			},
@@ -278,7 +279,7 @@ var Run = &cli.Command{
 		var remotes []*remote.Remote
 		for _, rmt := range config.Remotes {
 			remotes = append(remotes, &remote.Remote{
-				Name:          rmt.Name,
+				Protocol:      rmt.Protocol,
 				Host:          rmt.Host,
 				ListenAddress: rmt.ListenAddress,
 				Addresses:     rmt.Addresses,
@@ -288,7 +289,7 @@ var Run = &cli.Command{
 		var svcs = make([]*service.Service, 0, len(config.Services))
 		for _, svc := range config.Services {
 			svcs = append(svcs, &service.Service{
-				Name:         svc.Name,
+				Protocol:     svc.Protocol,
 				Addresses:    svc.Addresses,
 				AllowedPeers: svc.AllowedPeers,
 				Advertise:    svc.Advertise,

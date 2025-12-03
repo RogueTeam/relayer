@@ -29,11 +29,15 @@ import (
 )
 
 type Remote struct {
-	RefreshTimeout  time.Duration
+	// Timeout when GC active protocol connections
+	StreamTimeout time.Duration
+	// Timeout for the refresh process
+	RefreshTimeout time.Duration
+	// Interval between refresh processes
 	RefreshInterval time.Duration
-	// Name of the remote service
+	// Protocol of the remote service
 	// This should be the same as the one advertised by remote
-	Name string
+	Protocol protocol.ID
 	// Name used for handling the service with the configured proxy
 	Host string
 	// Listen address for incoming requests
@@ -74,7 +78,7 @@ func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err erro
 	h = &Handler{
 		logger: cfg.Logger.With(
 			"kind", "remote",
-			"name", remote.Name,
+			"name", remote.Protocol,
 			"id", cfg.Host.ID(),
 			"interval", remote.RefreshInterval,
 		),
@@ -84,7 +88,7 @@ func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err erro
 		peersQueue:   ringqueue.New[peer.ID](),
 		remote:       remote,
 		allowedPeers: set.New(remote.AllowedPeers...),
-		cid:          peers.IdentityCidFromData(remote.Name),
+		cid:          peers.IdentityCidFromData(remote.Protocol),
 	}
 	err = h.bind(ctx)
 	if err != nil {
@@ -130,14 +134,14 @@ func (h *Handler) bindWithRemoteAddresses(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *Handler) doBindWithDhtWork(interval time.Duration, logger *slog.Logger) (err error) {
-	var timeout = h.remote.RefreshTimeout
-	if timeout == 0 {
-		timeout = utils.DefaultTimeout
+func (h *Handler) doBindWithDhtWork(logger *slog.Logger) (err error) {
+	var refreshTimeout = h.remote.RefreshTimeout
+	if refreshTimeout == 0 {
+		refreshTimeout = utils.DefaultTimeout
 	}
 
 	logger.Debug("Pulling providers")
-	ctx, cancel := utils.NewContextWithTimeout(timeout)
+	ctx, cancel := utils.NewContextWithTimeout(refreshTimeout)
 	defer cancel()
 	providers, err := h.dht.FindProviders(ctx, h.cid)
 	if err != nil {
@@ -145,7 +149,12 @@ func (h *Handler) doBindWithDhtWork(interval time.Duration, logger *slog.Logger)
 		return
 	}
 
-	timeAgo := time.Now().Add(-interval)
+	streamTimeout := h.remote.StreamTimeout
+	if streamTimeout == 0 {
+		streamTimeout = utils.DefaultTimeout
+	}
+
+	timeAgo := time.Now().Add(-streamTimeout)
 	var wg sync.WaitGroup
 	for _, addrInfo := range providers {
 		wg.Go(func() {
@@ -153,7 +162,19 @@ func (h *Handler) doBindWithDhtWork(interval time.Duration, logger *slog.Logger)
 			conns := h.host.Network().ConnsToPeer(addrInfo.ID)
 			for _, conn := range conns {
 				logger := logger.With("connection", conn.RemoteMultiaddr())
-				if conn.Stat().Opened.Before(timeAgo) || conn.Stat().Opened.Equal(timeAgo) {
+				for _, stream := range conn.GetStreams() {
+					if stream.Protocol() != h.remote.Protocol {
+						continue
+					}
+					stat := stream.Stat()
+					if stat.Opened.Before(timeAgo) || stat.Opened.Equal(timeAgo) {
+						logger.Debug("Stream closed")
+						stream.ResetWithError(network.StreamGarbageCollected)
+						stream.Close()
+					}
+				}
+
+				if conn.Stat().NumStreams == 0 {
 					logger.Debug("Connection closed")
 					conn.CloseWithError(network.ConnGarbageCollected)
 					conn.Close()
@@ -211,7 +232,7 @@ func (h *Handler) bindWithDHT(ctx context.Context) (err error) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for h.running.Load() {
-			err = h.doBindWithDhtWork(interval, logger)
+			err = h.doBindWithDhtWork(logger)
 			if err != nil {
 				logger.Error("failed to do work", "error-msg", err.Error())
 			}
@@ -231,8 +252,7 @@ func (h *Handler) processConnection(conn manet.Conn) (err error) {
 	logger := h.logger.With("target", target)
 	logger.Info("Connecting")
 
-	pid := protocol.ID(h.remote.Name)
-	s, err := h.host.NewStream(context.TODO(), target, pid)
+	s, err := h.host.NewStream(context.TODO(), target, h.remote.Protocol)
 	if err != nil {
 		return fmt.Errorf("failed to create new stream: %w", err)
 	}
@@ -265,8 +285,8 @@ func (h *Handler) serve() (err error) {
 	}
 }
 
-func (h *Handler) Name() (name string) {
-	return h.remote.Name
+func (h *Handler) Protocol() (protocol protocol.ID) {
+	return h.remote.Protocol
 }
 
 func (h *Handler) Close() (err error) {
@@ -327,8 +347,7 @@ func (h *Handler) bind(ctx context.Context) (err error) {
 			logger := h.logger.With("target", target)
 			logger.Info("Proxying")
 
-			pid := protocol.ID(h.remote.Name)
-			s, err := h.host.NewStream(ctx, target, pid)
+			s, err := h.host.NewStream(ctx, target, h.remote.Protocol)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create new stream: %w", err)
 			}

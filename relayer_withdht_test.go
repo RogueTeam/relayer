@@ -116,7 +116,7 @@ func Test_WithDHT(t *testing.T) {
 				Services: []*service.Service{
 					{
 						AdvertiseInterval: time.Second,
-						Name:              "RAW",
+						Protocol:          "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -180,7 +180,7 @@ func Test_WithDHT(t *testing.T) {
 				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
-						Name:            "RAW",
+						Protocol:        "RAW",
 						ListenAddress:   disallowedClientListener.Multiaddr(),
 					},
 				},
@@ -251,7 +251,7 @@ func Test_WithDHT(t *testing.T) {
 				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
-						Name:            "RAW",
+						Protocol:        "RAW",
 						ListenAddress:   allowedBindListener.Multiaddr(),
 					},
 				},
@@ -370,7 +370,7 @@ func Test_WithDHT(t *testing.T) {
 				Services: []*service.Service{
 					{
 						AdvertiseInterval: time.Second,
-						Name:              "RAW",
+						Protocol:          "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -433,7 +433,7 @@ func Test_WithDHT(t *testing.T) {
 				Remote: []*remote.Remote{
 					{
 						RefreshInterval: time.Second,
-						Name:            "RAW",
+						Protocol:        "RAW",
 						ListenAddress:   tempBindListener.Multiaddr(),
 					},
 				},

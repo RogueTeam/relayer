@@ -73,7 +73,7 @@ func Test_NoDHT(t *testing.T) {
 				Host:   servicerHost,
 				Services: []*service.Service{
 					{
-						Name: "RAW",
+						Protocol: "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -114,7 +114,7 @@ func Test_NoDHT(t *testing.T) {
 				Host:   disallowedClientHost,
 				Remote: []*remote.Remote{
 					{
-						Name:          "RAW",
+						Protocol:      "RAW",
 						ListenAddress: disallowedBindListener.Multiaddr(),
 						Addresses:     remoteAddrs,
 					},
@@ -166,7 +166,7 @@ func Test_NoDHT(t *testing.T) {
 				Host:   allowedClientHost,
 				Remote: []*remote.Remote{
 					{
-						Name:          "RAW",
+						Protocol:      "RAW",
 						ListenAddress: allowedBindListener.Multiaddr(),
 						Addresses:     remoteAddrs,
 					},
@@ -240,7 +240,7 @@ func Test_NoDHT(t *testing.T) {
 				Host:   servicerHost,
 				Services: []*service.Service{
 					{
-						Name: "RAW",
+						Protocol: "RAW",
 						Addresses: []multiaddr.Multiaddr{
 							localListener.Multiaddr(),
 						},
@@ -283,7 +283,7 @@ func Test_NoDHT(t *testing.T) {
 				Host:   clientHost,
 				Remote: []*remote.Remote{
 					{
-						Name:          "RAW",
+						Protocol:      "RAW",
 						ListenAddress: tempBindListener.Multiaddr(),
 						Addresses:     remoteAddrs,
 					},
