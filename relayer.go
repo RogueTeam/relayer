@@ -144,7 +144,7 @@ func New(ctx context.Context, cfg *Config) (r *Relayer, err error) {
 	for _, entry := range cfg.Remote {
 		rmt, err := remote.New(ctx, remoteCfg, entry)
 		if err != nil {
-			return nil, fmt.Errorf("failed to register reomte: %s: %w", entry.Protocol, err)
+			return nil, fmt.Errorf("failed to register remote: %s: %w", entry.Protocol, err)
 		}
 		relayer.remotes = append(relayer.remotes, rmt)
 	}

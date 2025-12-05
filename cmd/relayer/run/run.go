@@ -276,7 +276,7 @@ var Run = &cli.Command{
 			log.Println("MDNS is disabled")
 		}
 
-		var remotes []*remote.Remote
+		var remotes = make([]*remote.Remote, 0, len(config.Remotes))
 		for _, rmt := range config.Remotes {
 			remotes = append(remotes, &remote.Remote{
 				Protocol:      rmt.Protocol,

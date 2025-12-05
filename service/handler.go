@@ -102,7 +102,10 @@ func (h *Handler) registerService() (err error) {
 		defer s.Close()
 
 		if len(allowedPeers) > 0 && !allowedPeers.Has(s.Conn().RemotePeer()) {
-			logger.Error("Peer not allowed")
+			logger.Error("Peer not allowed",
+				"remote-peer", s.Conn().RemotePeer(),
+				"allowed-peers", allowedPeers.Slice(),
+			)
 			return
 		}
 
