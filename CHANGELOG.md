@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.3](https://github.com/RogueTeam/relayer/compare/v0.0.2...v0.0.3) (2026-01-14)
+
+
+### Features
+
+* support for default transport libp2p ([e2a04ac](https://github.com/RogueTeam/relayer/commit/e2a04ac4981098109a46364d6f0f9c225b699981))
+
+
+### Bug Fixes
+
+* do not force quic re-connect ([ef15530](https://github.com/RogueTeam/relayer/commit/ef15530863e7a10e55c91b5e583698746cf47b3b))
+* improved logger groups ([865eb00](https://github.com/RogueTeam/relayer/commit/865eb00b74d7ac7c4e9431dd3c93dbe069f7ed7c))
+* removed transport ([4f55a3d](https://github.com/RogueTeam/relayer/commit/4f55a3d1b1ec4bf5577970b68c73fc8e2e2e752f))
+* versioning ([d02a969](https://github.com/RogueTeam/relayer/commit/d02a969164932dac4c9deeea861d902e5bfebffe))
+
 ### 0.0.2 (2026-01-14)
 
 

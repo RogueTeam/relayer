@@ -1,6 +1,6 @@
 {
   "name": "relayer",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Easily relay traffic between machines without managing complex cert infrastructure",
   "homepage": "https://github.com/RogueTeam/relayer#readme",
   "bugs": {
