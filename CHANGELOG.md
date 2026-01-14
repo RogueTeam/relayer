@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.5](https://github.com/RogueTeam/relayer/compare/v0.0.4...v0.0.5) (2026-01-14)
+
+
+### Bug Fixes
+
+* updated go version ([04127d2](https://github.com/RogueTeam/relayer/commit/04127d22d79d5fc3a7013117cf4ebea14a64088f))
+
 ### [0.0.4](https://github.com/RogueTeam/relayer/compare/v0.0.3...v0.0.4) (2026-01-14)
 
 
