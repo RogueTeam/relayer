@@ -10,7 +10,7 @@
     "type": "git",
     "url": "git+https://github.com/RogueTeam/relayer.git"
   },
-  "license": "AGPL-3.0-or-later",
+  "license": "UNLICENSE",
   "author": "Antonio Donis",
   "type": "commonjs",
   "main": "index.js",
