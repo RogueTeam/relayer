@@ -1,0 +1,26 @@
+{
+  "name": "relayer",
+  "version": "0.0.2",
+  "description": "Easily relay traffic between machines without managing complex cert infrastructure",
+  "homepage": "https://github.com/RogueTeam/relayer#readme",
+  "bugs": {
+    "url": "https://github.com/RogueTeam/relayer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RogueTeam/relayer.git"
+  },
+  "license": "AGPL-3.0-or-later",
+  "author": "Antonio Donis",
+  "type": "commonjs",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "standard-version": "^9.5.0"
+  }
+}
