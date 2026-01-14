@@ -76,12 +76,13 @@ type Config struct {
 // the passed context is used only during configuration
 func New(ctx context.Context, cfg *Config, remote *Remote) (h *Handler, err error) {
 	h = &Handler{
-		logger: cfg.Logger.With(
-			"kind", "remote",
-			"name", remote.Protocol,
-			"id", cfg.Host.ID(),
-			"interval", remote.RefreshInterval,
-		),
+		logger: cfg.Logger.
+			WithGroup("Remote").
+			With(
+				"name", remote.Protocol,
+				"id", cfg.Host.ID(),
+				"interval", remote.RefreshInterval,
+			),
 		host:         cfg.Host,
 		dht:          cfg.DHT,
 		proxy:        cfg.Proxy,
@@ -115,7 +116,7 @@ func (h *Handler) bindWithRemoteAddress(ctx context.Context, logger *slog.Logger
 }
 
 func (h *Handler) bindWithRemoteAddresses(ctx context.Context) (err error) {
-	logger := h.logger.With("mode", "addresses", "addresses", h.remote.Addresses)
+	logger := h.logger.WithGroup("Addresses").With("addresses", h.remote.Addresses)
 	logger.Info("using remote peers")
 
 	peers := make([]peer.ID, 0, len(h.remote.Addresses))
@@ -217,7 +218,7 @@ func (h *Handler) doBindWithDhtWork(logger *slog.Logger) (err error) {
 }
 
 func (h *Handler) bindWithDHT(ctx context.Context) (err error) {
-	logger := h.logger.With("mode", "dht")
+	logger := h.logger.WithGroup("DHT")
 	logger.Info("Using DHT truth of source")
 
 	// Spawn worker that retrieves providers of the requested service.

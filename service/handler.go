@@ -41,12 +41,13 @@ type Service struct {
 
 func Register(cfg *Config, svc *Service) (h *Handler, err error) {
 	h = &Handler{
-		logger: cfg.Logger.With(
-			"kind", "service",
-			"name", svc.Protocol,
-			"id", cfg.Host.ID(),
-			"interval", svc.AdvertiseInterval,
-		),
+		logger: cfg.Logger.
+			WithGroup("Service").
+			With(
+				"name", svc.Protocol,
+				"id", cfg.Host.ID(),
+				"interval", svc.AdvertiseInterval,
+			),
 		host:              cfg.Host,
 		dht:               cfg.DHT,
 		protocol:          svc.Protocol,
