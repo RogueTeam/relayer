@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.4](https://github.com/RogueTeam/relayer/compare/v0.0.3...v0.0.4) (2026-01-14)
+
+
+### Bug Fixes
+
+* fixed license and workflow ([fb4b460](https://github.com/RogueTeam/relayer/commit/fb4b4607bc55f0dc33e9e9d7ee7b74b9c9150f8d))
+
 ### [0.0.3](https://github.com/RogueTeam/relayer/compare/v0.0.2...v0.0.3) (2026-01-14)
 
 
