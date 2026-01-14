@@ -9,6 +9,7 @@ import (
 
 	_ "embed"
 
+	"github.com/RogueTeam/relayer/cmd/relayer/quic"
 	"github.com/RogueTeam/relayer/internal/mdnsutils"
 	"github.com/RogueTeam/relayer/internal/p2p/identity"
 	"github.com/RogueTeam/relayer/internal/system"
@@ -123,6 +124,8 @@ var DHT = &cli.Command{
 		}
 
 		hostOptions := []libp2p.Option{
+			quic.TransportOption,
+			libp2p.DefaultTransports,
 			libp2p.Identity(hostId),
 			libp2p.ListenAddrs(config.Listen...),
 		}
