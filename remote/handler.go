@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -158,8 +159,10 @@ func (h *Handler) doBindWithDhtWork(logger *slog.Logger) (err error) {
 	timeAgo := time.Now().Add(-streamTimeout)
 	var wg sync.WaitGroup
 	for _, addrInfo := range providers {
+		if strings.Contains(addrInfo.String(), "quic-v1") {
+			continue // Specifically for quic we can do a quic level ping
+		}
 		wg.Go(func() {
-
 			conns := h.host.Network().ConnsToPeer(addrInfo.ID)
 			for _, conn := range conns {
 				logger := logger.With("connection", conn.RemoteMultiaddr())
